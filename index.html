@@ -556,7 +556,7 @@
     <button class="sim-tab" onclick="switchSim('work')">Work & Energy</button>
   </div>
 
-  <a href="https://github.com/YOUR_USERNAME/physicslab" target="_blank"
+  <a href="https://github.com/phanminhhanh7-tech/physicslab" target="_blank"
      style="display:flex;align-items:center;gap:6px;padding:6px 14px;
             border:1px solid var(--border);border-radius:7px;background:var(--surface2);
             color:var(--text-dim);font-size:12px;font-family:'DM Sans',sans-serif;
@@ -584,57 +584,74 @@
     </div>
 
     <div id="ctrl-projectile">
+
       <div class="solve-for-area">
         <div class="sidebar-section-title">Solve For</div>
         <select class="solve-select" id="proj-solveFor" onchange="updateProjectile()">
-          <option value="range">Range (R)</option>
-          <option value="maxHeight">Max Height (H)</option>
-          <option value="timeOfFlight">Time of Flight (T)</option>
-          <option value="angle">Launch Angle (θ)</option>
-          <option value="velocity">Initial Velocity (v₀)</option>
+          <option value="R">Range (R)</option>
+          <option value="H">Max Height (H)</option>
+          <option value="T">Time of Flight (T)</option>
+          <option value="theta">Launch Angle (theta)</option>
+          <option value="v0">Initial Velocity (v0)</option>
+          <option value="vx">Horiz Velocity (vx)</option>
+          <option value="vy">Vert Velocity (vy)</option>
+          <option value="KE">Kinetic Energy (KE)</option>
+          <option value="PE">Potential Energy (PE)</option>
+          <option value="E">Total Energy (E)</option>
+          <option value="g">Gravity (g)</option>
+          <option value="m">Mass (m)</option>
         </select>
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-section-title">Variables</div>
+        <div class="sidebar-section-title">Variables <span style="font-size:9px;color:var(--text-dim);font-family:DM Sans;text-transform:none;letter-spacing:0">(leave blank = unknown)</span></div>
 
         <div class="input-group">
-          <div class="input-label"><span>Initial Velocity (v₀)</span><span class="unit">m/s</span></div>
+          <div class="input-label"><span>Initial Velocity (v0)</span><span class="unit">m/s</span></div>
           <div class="input-row">
-            <input type="range" id="proj-v0-range" min="1" max="100" value="30" oninput="syncInput('proj-v0', this.value); updateProjectile()">
-            <input type="number" id="proj-v0" value="30" min="1" max="100" oninput="syncRange('proj-v0-range', this.value); updateProjectile()">
+            <input type="number" id="proj-v0" placeholder="e.g. 30" step="any" oninput="updateProjectile()" style="width:100%">
           </div>
         </div>
-
         <div class="input-group">
-          <div class="input-label"><span>Launch Angle (θ)</span><span class="unit">deg</span></div>
+          <div class="input-label"><span>Launch Angle (theta)</span><span class="unit">deg</span></div>
           <div class="input-row">
-            <input type="range" id="proj-angle-range" min="1" max="89" value="45" oninput="syncInput('proj-angle', this.value); updateProjectile()">
-            <input type="number" id="proj-angle" value="45" min="1" max="89" oninput="syncRange('proj-angle-range', this.value); updateProjectile()">
+            <input type="number" id="proj-angle" placeholder="e.g. 45" step="any" oninput="updateProjectile()" style="width:100%">
           </div>
         </div>
-
         <div class="input-group">
-          <div class="input-label"><span>Gravity (g)</span><span class="unit">m/s²</span></div>
+          <div class="input-label"><span>Range (R)</span><span class="unit">m</span></div>
           <div class="input-row">
-            <input type="range" id="proj-g-range" min="1" max="25" step="0.1" value="9.81" oninput="syncInput('proj-g', this.value); updateProjectile()">
-            <input type="number" id="proj-g" value="9.81" step="0.1" oninput="syncRange('proj-g-range', this.value); updateProjectile()">
+            <input type="number" id="proj-R" placeholder="e.g. 91.7" step="any" oninput="updateProjectile()" style="width:100%">
           </div>
         </div>
-
+        <div class="input-group">
+          <div class="input-label"><span>Max Height (H)</span><span class="unit">m</span></div>
+          <div class="input-row">
+            <input type="number" id="proj-H" placeholder="e.g. 11.5" step="any" oninput="updateProjectile()" style="width:100%">
+          </div>
+        </div>
+        <div class="input-group">
+          <div class="input-label"><span>Flight Time (T)</span><span class="unit">s</span></div>
+          <div class="input-row">
+            <input type="number" id="proj-T" placeholder="e.g. 4.3" step="any" oninput="updateProjectile()" style="width:100%">
+          </div>
+        </div>
         <div class="input-group">
           <div class="input-label"><span>Mass (m)</span><span class="unit">kg</span></div>
           <div class="input-row">
-            <input type="range" id="proj-m-range" min="0.1" max="100" step="0.1" value="1" oninput="syncInput('proj-m', this.value); updateProjectile()">
-            <input type="number" id="proj-m" value="1" step="0.1" oninput="syncRange('proj-m-range', this.value); updateProjectile()">
+            <input type="number" id="proj-m" placeholder="e.g. 1" step="any" oninput="updateProjectile()" style="width:100%">
           </div>
         </div>
-
         <div class="input-group">
-          <div class="input-label"><span>Initial Height (y₀)</span><span class="unit">m</span></div>
+          <div class="input-label"><span>Initial Height (h0)</span><span class="unit">m</span></div>
           <div class="input-row">
-            <input type="range" id="proj-h0-range" min="0" max="100" value="0" oninput="syncInput('proj-h0', this.value); updateProjectile()">
-            <input type="number" id="proj-h0" value="0" min="0" oninput="syncRange('proj-h0-range', this.value); updateProjectile()">
+            <input type="number" id="proj-h0" placeholder="e.g. 0" step="any" oninput="updateProjectile()" style="width:100%">
+          </div>
+        </div>
+        <div class="input-group">
+          <div class="input-label"><span>Gravity (g)</span><span class="unit">m/s²</span></div>
+          <div class="input-row">
+            <input type="number" id="proj-g" value="9.81" step="any" oninput="updateProjectile()" style="width:100%">
           </div>
         </div>
 
@@ -649,181 +666,196 @@
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-section-title">Results</div>
-        <div class="results-grid">
-          <div class="result-card" id="proj-res-range">
-            <div class="r-label">Range</div>
-            <div class="r-value" id="proj-r-range">—</div>
-          </div>
-          <div class="result-card" id="proj-res-height">
-            <div class="r-label">Max Height</div>
-            <div class="r-value" id="proj-r-height">—</div>
-          </div>
-          <div class="result-card" id="proj-res-tof">
-            <div class="r-label">Flight Time</div>
-            <div class="r-value" id="proj-r-tof">—</div>
-          </div>
-          <div class="result-card" id="proj-res-v">
-            <div class="r-label">Curr Speed</div>
-            <div class="r-value" id="proj-r-v">—</div>
-          </div>
-          <div class="result-card">
-            <div class="r-label">Curr KE</div>
-            <div class="r-value" id="proj-r-ke">—</div>
-          </div>
-          <div class="result-card">
-            <div class="r-label">Curr x,y</div>
-            <div class="r-value" id="proj-r-xy">—</div>
-          </div>
+        <div class="sidebar-section-title">Solver Steps</div>
+        <div id="proj-solver-steps" style="font-family:Space Mono,monospace;font-size:11px;line-height:1.8;color:var(--text-mid);">
+          Fill in variables above to solve.
         </div>
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-section-title">Equations</div>
-        <div class="equation-box">
-          <div class="eq-title">Kinematics</div>
-          <div class="eq-formula">x = v₀cos(θ)·t<br>y = v₀sin(θ)·t - ½gt²</div>
-        </div>
-        <div class="equation-box">
-          <div class="eq-title">Derived</div>
-          <div class="eq-formula">H = v₀²sin²θ / 2g<br>T = 2v₀sinθ / g<br>R = v₀²sin(2θ) / g</div>
-        </div>
-        <div class="equation-box">
-          <div class="eq-title">Energy</div>
-          <div class="eq-formula">KE = ½mv²</div>
+        <div class="sidebar-section-title">Results</div>
+        <div class="results-grid">
+          <div class="result-card" id="prc-R"><div class="r-label">Range (R)</div><div class="r-value" id="proj-r-R">--</div></div>
+          <div class="result-card" id="prc-H"><div class="r-label">Max Height (H)</div><div class="r-value" id="proj-r-H">--</div></div>
+          <div class="result-card" id="prc-T"><div class="r-label">Flight Time (T)</div><div class="r-value" id="proj-r-T">--</div></div>
+          <div class="result-card" id="prc-v0"><div class="r-label">v0</div><div class="r-value" id="proj-r-v0">--</div></div>
+          <div class="result-card" id="prc-vx"><div class="r-label">vx</div><div class="r-value" id="proj-r-vx">--</div></div>
+          <div class="result-card" id="prc-vy"><div class="r-label">vy (initial)</div><div class="r-value" id="proj-r-vy">--</div></div>
+          <div class="result-card" id="prc-KE"><div class="r-label">KE</div><div class="r-value" id="proj-r-KE">--</div></div>
+          <div class="result-card" id="prc-PE"><div class="r-label">PE</div><div class="r-value" id="proj-r-PE">--</div></div>
+          <div class="result-card" id="prc-E"><div class="r-label">Total E</div><div class="r-value" id="proj-r-E">--</div></div>
+          <div class="result-card" id="prc-theta"><div class="r-label">Angle</div><div class="r-value" id="proj-r-theta">--</div></div>
+          <div class="result-card" id="prc-v"><div class="r-label">Curr Speed</div><div class="r-value" id="proj-r-v">--</div></div>
+          <div class="result-card" id="prc-xy"><div class="r-label">Curr x,y</div><div class="r-value" id="proj-r-xy">--</div></div>
         </div>
       </div>
+
     </div>
 
     <!-- COLLISION CONTROLS -->
     <div id="ctrl-collision" class="hidden">
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Object 1</div>
-        <div class="input-group">
-          <div class="input-label"><span>Mass (m₁)</span><span class="unit">kg</span></div>
-          <div class="input-row">
-            <input type="range" id="col-m1-range" min="0.5" max="20" step="0.5" value="5" oninput="syncInput('col-m1', this.value); updateCollision()">
-            <input type="number" id="col-m1" value="5" step="0.5" oninput="syncRange('col-m1-range', this.value); updateCollision()">
-          </div>
-        </div>
-        <div class="input-group">
-          <div class="input-label"><span>Velocity (v₁)</span><span class="unit">m/s</span></div>
-          <div class="input-row">
-            <input type="range" id="col-v1-range" min="-20" max="20" step="0.5" value="8" oninput="syncInput('col-v1', this.value); updateCollision()">
-            <input type="number" id="col-v1" value="8" step="0.5" oninput="syncRange('col-v1-range', this.value); updateCollision()">
-          </div>
-        </div>
-      </div>
 
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Object 2</div>
-        <div class="input-group">
-          <div class="input-label"><span>Mass (m₂)</span><span class="unit">kg</span></div>
-          <div class="input-row">
-            <input type="range" id="col-m2-range" min="0.5" max="20" step="0.5" value="3" oninput="syncInput('col-m2', this.value); updateCollision()">
-            <input type="number" id="col-m2" value="3" step="0.5" oninput="syncRange('col-m2-range', this.value); updateCollision()">
-          </div>
-        </div>
-        <div class="input-group">
-          <div class="input-label"><span>Velocity (v₂)</span><span class="unit">m/s</span></div>
-          <div class="input-row">
-            <input type="range" id="col-v2-range" min="-20" max="20" step="0.5" value="-3" oninput="syncInput('col-v2', this.value); updateCollision()">
-            <input type="number" id="col-v2" value="-3" step="0.5" oninput="syncRange('col-v2-range', this.value); updateCollision()">
-          </div>
-        </div>
-      </div>
-
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Collision Type</div>
-        <select id="col-type" onchange="updateCollision()">
-          <option value="elastic">Elastic</option>
-          <option value="inelastic">Perfectly Inelastic</option>
+      <div class="solve-for-area">
+        <div class="sidebar-section-title">Solve For</div>
+        <select class="solve-select" id="col-solveFor" onchange="updateCollision()">
+          <option value="v1a">v1 after collision</option>
+          <option value="v2a">v2 after collision</option>
+          <option value="m1">Mass 1 (m1)</option>
+          <option value="m2">Mass 2 (m2)</option>
+          <option value="v1">Velocity 1 before (v1)</option>
+          <option value="v2">Velocity 2 before (v2)</option>
+          <option value="KEb">KE before</option>
+          <option value="KEa">KE after</option>
+          <option value="KElost">KE lost</option>
+          <option value="pt">Total momentum</option>
         </select>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Variables <span style="font-size:9px;color:var(--text-dim);font-family:DM Sans;text-transform:none;letter-spacing:0">(leave blank = unknown)</span></div>
+
+        <div style="font-size:10px;color:var(--accent3);font-family:Space Mono;letter-spacing:1px;margin-bottom:8px;text-transform:uppercase">Object 1</div>
+        <div class="input-group">
+          <div class="input-label"><span>Mass (m1)</span><span class="unit">kg</span></div>
+          <div class="input-row">
+            <input type="number" id="col-m1" placeholder="e.g. 5" step="any" oninput="updateCollision()" style="width:100%">
+          </div>
+        </div>
+        <div class="input-group">
+          <div class="input-label"><span>Velocity before (v1)</span><span class="unit">m/s</span></div>
+          <div class="input-row">
+            <input type="number" id="col-v1" placeholder="e.g. 8" step="any" oninput="updateCollision()" style="width:100%">
+          </div>
+        </div>
+
+        <div style="font-size:10px;color:var(--accent2);font-family:Space Mono;letter-spacing:1px;margin:10px 0 8px;text-transform:uppercase">Object 2</div>
+        <div class="input-group">
+          <div class="input-label"><span>Mass (m2)</span><span class="unit">kg</span></div>
+          <div class="input-row">
+            <input type="number" id="col-m2" placeholder="e.g. 3" step="any" oninput="updateCollision()" style="width:100%">
+          </div>
+        </div>
+        <div class="input-group">
+          <div class="input-label"><span>Velocity before (v2)</span><span class="unit">m/s</span></div>
+          <div class="input-row">
+            <input type="number" id="col-v2" placeholder="e.g. -3" step="any" oninput="updateCollision()" style="width:100%">
+          </div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="sidebar-section-title">Collision Type</div>
+          <select id="col-type" onchange="updateCollision()" style="width:100%;margin-top:4px">
+            <option value="elastic">Elastic</option>
+            <option value="inelastic">Perfectly Inelastic</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- SOLVER STEPS -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Solver Steps</div>
+        <div id="col-solver-steps" style="font-family:Space Mono,monospace;font-size:11px;line-height:1.8;color:var(--text-mid);">
+          Fill in variables above to solve.
+        </div>
       </div>
 
       <div class="sidebar-section">
         <div class="sidebar-section-title">Results</div>
         <div class="results-grid">
-          <div class="result-card"><div class="r-label">p₁ before</div><div class="r-value" id="col-r-p1b">—</div></div>
-          <div class="result-card"><div class="r-label">p₂ before</div><div class="r-value" id="col-r-p2b">—</div></div>
-          <div class="result-card highlight"><div class="r-label">v₁ after</div><div class="r-value" id="col-r-v1a">—</div></div>
-          <div class="result-card highlight"><div class="r-label">v₂ after</div><div class="r-value" id="col-r-v2a">—</div></div>
-          <div class="result-card"><div class="r-label">KE before</div><div class="r-value" id="col-r-keb">—</div></div>
-          <div class="result-card"><div class="r-label">KE after</div><div class="r-value" id="col-r-kea">—</div></div>
-          <div class="result-card"><div class="r-label">p total</div><div class="r-value" id="col-r-pt">—</div></div>
-          <div class="result-card"><div class="r-label">KE lost</div><div class="r-value" id="col-r-kel">—</div></div>
+          <div class="result-card" id="crc-v1a"><div class="r-label">v1 after</div><div class="r-value" id="col-r-v1a">--</div></div>
+          <div class="result-card" id="crc-v2a"><div class="r-label">v2 after</div><div class="r-value" id="col-r-v2a">--</div></div>
+          <div class="result-card" id="crc-p1b"><div class="r-label">p1 before</div><div class="r-value" id="col-r-p1b">--</div></div>
+          <div class="result-card" id="crc-p2b"><div class="r-label">p2 before</div><div class="r-value" id="col-r-p2b">--</div></div>
+          <div class="result-card" id="crc-KEb"><div class="r-label">KE before</div><div class="r-value" id="col-r-keb">--</div></div>
+          <div class="result-card" id="crc-KEa"><div class="r-label">KE after</div><div class="r-value" id="col-r-kea">--</div></div>
+          <div class="result-card" id="crc-pt"><div class="r-label">p total</div><div class="r-value" id="col-r-pt">--</div></div>
+          <div class="result-card" id="crc-KElost"><div class="r-label">KE lost</div><div class="r-value" id="col-r-kel">--</div></div>
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Equations</div>
-        <div class="equation-box">
-          <div class="eq-title">Momentum Conservation</div>
-          <div class="eq-formula">m₁v₁ + m₂v₂ = m₁v₁'+ m₂v₂'</div>
-        </div>
-        <div class="equation-box">
-          <div class="eq-title">Elastic</div>
-          <div class="eq-formula">v₁'= (m₁-m₂)v₁/(m₁+m₂)<br>   + 2m₂v₂/(m₁+m₂)</div>
-        </div>
-        <div class="equation-box">
-          <div class="eq-title">Inelastic</div>
-          <div class="eq-formula">v_f = (m₁v₁+m₂v₂)/(m₁+m₂)</div>
-        </div>
-      </div>
     </div>
 
     <!-- PENDULUM CONTROLS -->
     <div id="ctrl-pendulum" class="hidden">
+
+      <div class="solve-for-area">
+        <div class="sidebar-section-title">Solve For</div>
+        <select class="solve-select" id="pen-solveFor" onchange="updatePendulum()">
+          <option value="T">Period (T)</option>
+          <option value="f">Frequency (f)</option>
+          <option value="L">Length (L)</option>
+          <option value="g">Gravity (g)</option>
+          <option value="KE">Kinetic Energy (KE)</option>
+          <option value="PE">Potential Energy (PE)</option>
+          <option value="E">Total Energy (E)</option>
+          <option value="v">Speed (v)</option>
+          <option value="m">Mass (m)</option>
+          <option value="omega">Angular velocity (omega)</option>
+        </select>
+      </div>
+
       <div class="sidebar-section">
-        <div class="sidebar-section-title">Variables</div>
+        <div class="sidebar-section-title">Variables <span style="font-size:9px;color:var(--text-dim);font-family:DM Sans;text-transform:none;letter-spacing:0">(leave blank = unknown)</span></div>
+
         <div class="input-group">
           <div class="input-label"><span>Length (L)</span><span class="unit">m</span></div>
           <div class="input-row">
-            <input type="range" id="pen-L-range" min="0.5" max="10" step="0.1" value="3" oninput="syncInput('pen-L', this.value); updatePendulum()">
-            <input type="number" id="pen-L" value="3" step="0.1" oninput="syncRange('pen-L-range', this.value); updatePendulum()">
+            <input type="number" id="pen-L" placeholder="e.g. 3" step="any" oninput="updatePendulum()" style="width:100%">
           </div>
         </div>
         <div class="input-group">
           <div class="input-label"><span>Mass (m)</span><span class="unit">kg</span></div>
           <div class="input-row">
-            <input type="range" id="pen-m-range" min="0.1" max="20" step="0.1" value="2" oninput="syncInput('pen-m', this.value); updatePendulum()">
-            <input type="number" id="pen-m" value="2" step="0.1" oninput="syncRange('pen-m-range', this.value); updatePendulum()">
+            <input type="number" id="pen-m" placeholder="e.g. 2" step="any" oninput="updatePendulum()" style="width:100%">
           </div>
         </div>
         <div class="input-group">
-          <div class="input-label"><span>Start Angle (θ₀)</span><span class="unit">deg</span></div>
+          <div class="input-label"><span>Start Angle (theta0)</span><span class="unit">deg</span></div>
           <div class="input-row">
-            <input type="range" id="pen-angle-range" min="5" max="175" value="45" oninput="syncInput('pen-angle', this.value); updatePendulum()">
-            <input type="number" id="pen-angle" value="45" oninput="syncRange('pen-angle-range', this.value); updatePendulum()">
+            <input type="number" id="pen-angle" placeholder="e.g. 45" step="any" oninput="updatePendulum()" style="width:100%">
+          </div>
+        </div>
+        <div class="input-group">
+          <div class="input-label"><span>Period (T)</span><span class="unit">s</span></div>
+          <div class="input-row">
+            <input type="number" id="pen-T" placeholder="e.g. 3.47" step="any" oninput="updatePendulum()" style="width:100%">
           </div>
         </div>
         <div class="input-group">
           <div class="input-label"><span>Gravity (g)</span><span class="unit">m/s²</span></div>
           <div class="input-row">
-            <input type="range" id="pen-g-range" min="1" max="25" step="0.1" value="9.81" oninput="syncInput('pen-g', this.value); updatePendulum()">
-            <input type="number" id="pen-g" value="9.81" step="0.1" oninput="syncRange('pen-g-range', this.value); updatePendulum()">
+            <input type="number" id="pen-g" value="9.81" step="any" oninput="updatePendulum()" style="width:100%">
           </div>
         </div>
         <div class="input-group">
           <div class="input-label"><span>Damping (b)</span><span class="unit">coef</span></div>
           <div class="input-row">
-            <input type="range" id="pen-damp-range" min="0" max="1" step="0.01" value="0" oninput="syncInput('pen-damp', this.value); updatePendulum()">
-            <input type="number" id="pen-damp" value="0" step="0.01" oninput="syncRange('pen-damp-range', this.value); updatePendulum()">
+            <input type="number" id="pen-damp" value="0" step="any" min="0" max="1" oninput="updatePendulum()" style="width:100%">
           </div>
+        </div>
+      </div>
+
+      <!-- SOLVER STEPS -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Solver Steps</div>
+        <div id="pen-solver-steps" style="font-family:Space Mono,monospace;font-size:11px;line-height:1.8;color:var(--text-mid);">
+          Fill in variables above to solve.
         </div>
       </div>
 
       <div class="sidebar-section">
         <div class="sidebar-section-title">Results</div>
         <div class="results-grid">
-          <div class="result-card highlight"><div class="r-label">Period (T)</div><div class="r-value" id="pen-r-T">—</div></div>
-          <div class="result-card highlight"><div class="r-label">Freq (f)</div><div class="r-value" id="pen-r-f">—</div></div>
-          <div class="result-card"><div class="r-label">KE</div><div class="r-value" id="pen-r-ke">—</div></div>
-          <div class="result-card"><div class="r-label">PE</div><div class="r-value" id="pen-r-pe">—</div></div>
-          <div class="result-card"><div class="r-label">Total E</div><div class="r-value" id="pen-r-E">—</div></div>
-          <div class="result-card"><div class="r-label">Speed</div><div class="r-value" id="pen-r-v">—</div></div>
-          <div class="result-card"><div class="r-label">Angle</div><div class="r-value" id="pen-r-angle">—</div></div>
-          <div class="result-card"><div class="r-label">ω</div><div class="r-value" id="pen-r-omega">—</div></div>
+          <div class="result-card" id="enc-T"><div class="r-label">Period (T)</div><div class="r-value" id="pen-r-T">--</div></div>
+          <div class="result-card" id="enc-f"><div class="r-label">Frequency (f)</div><div class="r-value" id="pen-r-f">--</div></div>
+          <div class="result-card" id="enc-KE"><div class="r-label">KE</div><div class="r-value" id="pen-r-ke">--</div></div>
+          <div class="result-card" id="enc-PE"><div class="r-label">PE</div><div class="r-value" id="pen-r-pe">--</div></div>
+          <div class="result-card" id="enc-E"><div class="r-label">Total E</div><div class="r-value" id="pen-r-E">--</div></div>
+          <div class="result-card" id="enc-v"><div class="r-label">Speed</div><div class="r-value" id="pen-r-v">--</div></div>
+          <div class="result-card" id="enc-angle"><div class="r-label">Angle</div><div class="r-value" id="pen-r-angle">--</div></div>
+          <div class="result-card" id="enc-omega"><div class="r-label">omega</div><div class="r-value" id="pen-r-omega">--</div></div>
+          <div class="result-card" id="enc-L"><div class="r-label">Length (L)</div><div class="r-value" id="pen-r-L">--</div></div>
+          <div class="result-card" id="enc-g"><div class="r-label">Gravity (g)</div><div class="r-value" id="pen-r-g">--</div></div>
         </div>
       </div>
 
@@ -846,12 +878,6 @@
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Equations</div>
-        <div class="equation-box">
-          <div class="eq-formula">T = 2π√(L/g)<br>ω = √(g/L)<br>θ(t) = θ₀cos(ωt)<br>v = √(2gL(1-cosθ))<br>PE = mgL(1-cosθ)<br>KE = ½mv²</div>
-        </div>
-      </div>
     </div>
 
     <!-- WORK & ENERGY CONTROLS -->
@@ -1275,38 +1301,173 @@ function resetProjectile() {
 }
 
 function updateProjectile() {
-  const v0 = getVal('proj-v0', 30);
-  const theta = getVal('proj-angle', 45) * Math.PI / 180;
-  const g = getVal('proj-g', 9.81);
-  const m = getVal('proj-m', 1);
-  const h0 = getVal('proj-h0', 0);
+  // -- Read inputs (null = unknown) ----------------------------
+  var s = {
+    v0:    getNullable('proj-v0'),
+    theta: getNullable('proj-angle'),
+    R:     getNullable('proj-R'),
+    H:     getNullable('proj-H'),
+    T:     getNullable('proj-T'),
+    m:     getNullable('proj-m'),
+    h0:    getNullable('proj-h0') || 0,
+    g:     getNullable('proj-g') || 9.81,
+    vx: null, vy: null, KE: null, PE: null, E: null
+  };
 
-  // Derived values
-  const sinT = Math.sin(theta), cosT = Math.cos(theta);
-  const H = h0 + (v0 * v0 * sinT * sinT) / (2 * g);
-  const T_up = v0 * sinT / g;
-  const T_total = T_up + Math.sqrt(2 * H / g);
-  const R = v0 * cosT * T_total;
-  const v_now = Math.sqrt(proj.vx ** 2 + proj.vy ** 2);
-  const ke_now = 0.5 * m * v_now * v_now;
+  var userKeys = {};
+  Object.keys(s).forEach(function(k){ if (s[k] !== null) userKeys[k] = true; });
+  var solveFor = document.getElementById('proj-solveFor').value;
+  var log = [];
 
-  setResult('proj-r-range', R, 'm');
-  setResult('proj-r-height', H, 'm');
-  setResult('proj-r-tof', T_total, 's');
-  setResult('proj-r-v', v_now, 'm/s');
-  setResult('proj-r-ke', ke_now, 'J');
-  setResult('proj-r-xy', `${fmt(proj.x,1)},${fmt(proj.y,1)}`);
+  // -- Propagation solver (15 passes) --------------------------
+  var changed = true, passes = 0;
+  while (changed && passes < 15) {
+    changed = false; passes++;
+
+    // vx = v0 * cos(theta)
+    if (s.vx === null && s.v0 !== null && s.theta !== null) {
+      s.vx = s.v0 * Math.cos(s.theta * Math.PI / 180);
+      log.push({ eq:'Horizontal velocity', formula:'vx = v0 * cos(theta)',
+        sub:'vx = '+fvN(s.v0)+'*cos('+fvN(s.theta,1)+') = '+fmtSci(s.vx)+' m/s' });
+      changed = true;
+    }
+    // vy = v0 * sin(theta)
+    if (s.vy === null && s.v0 !== null && s.theta !== null) {
+      s.vy = s.v0 * Math.sin(s.theta * Math.PI / 180);
+      log.push({ eq:'Vertical velocity', formula:'vy = v0 * sin(theta)',
+        sub:'vy = '+fvN(s.v0)+'*sin('+fvN(s.theta,1)+') = '+fmtSci(s.vy)+' m/s' });
+      changed = true;
+    }
+    // v0 from vx and theta
+    if (s.v0 === null && s.vx !== null && s.theta !== null) {
+      var ct = Math.cos(s.theta * Math.PI / 180);
+      if (Math.abs(ct) > 1e-9) { s.v0 = s.vx / ct; changed = true;
+        log.push({ eq:'Initial speed', formula:'v0 = vx / cos(theta)', sub:'v0 = '+fmtSci(s.vx)+'/'+fvN(ct,3)+' = '+fmtSci(s.v0)+' m/s' }); }
+    }
+    // theta from vx and vy
+    if (s.theta === null && s.vx !== null && s.vy !== null) {
+      s.theta = Math.atan2(s.vy, s.vx) * 180 / Math.PI; changed = true;
+      log.push({ eq:'Launch angle', formula:'theta = atan2(vy, vx)', sub:'theta = atan2('+fvN(s.vy)+','+fvN(s.vx)+') = '+fmtSci(s.theta)+' deg' });
+    }
+    // H = h0 + vy^2 / (2g)
+    if (s.H === null && s.vy !== null) {
+      s.H = s.h0 + (s.vy * s.vy) / (2 * s.g); changed = true;
+      log.push({ eq:'Max height', formula:'H = h0 + vy^2 / (2g)', sub:'H = '+fvN(s.h0)+' + '+fvN(s.vy)+'^2/(2*'+fvN(s.g)+') = '+fmtSci(s.H)+' m' });
+    }
+    // vy from H
+    if (s.vy === null && s.H !== null) {
+      var disc = 2 * s.g * (s.H - s.h0);
+      if (disc >= 0) { s.vy = Math.sqrt(disc); changed = true;
+        log.push({ eq:'Vert velocity from H', formula:'vy = sqrt(2g*(H-h0))', sub:'vy = sqrt(2*'+fvN(s.g)+'*('+fvN(s.H,1)+'-'+fvN(s.h0)+')) = '+fmtSci(s.vy)+' m/s' }); }
+    }
+    // T = vy/g + sqrt(2H/g)  (time up + time down from apex)
+    if (s.T === null && s.vy !== null && s.H !== null) {
+      s.T = s.vy / s.g + Math.sqrt(2 * s.H / s.g); changed = true;
+      log.push({ eq:'Flight time', formula:'T = vy/g + sqrt(2H/g)', sub:'T = '+fvN(s.vy)+'/'+fvN(s.g)+' + sqrt(2*'+fvN(s.H,1)+'/'+fvN(s.g)+') = '+fmtSci(s.T)+' s' });
+    }
+    // R = vx * T
+    if (s.R === null && s.vx !== null && s.T !== null) {
+      s.R = s.vx * s.T; changed = true;
+      log.push({ eq:'Range', formula:'R = vx * T', sub:'R = '+fvN(s.vx)+'*'+fvN(s.T)+' = '+fmtSci(s.R)+' m' });
+    }
+    // vx from R and T
+    if (s.vx === null && s.R !== null && s.T !== null && s.T > 1e-9) {
+      s.vx = s.R / s.T; changed = true;
+      log.push({ eq:'Horiz velocity from R,T', formula:'vx = R / T', sub:'vx = '+fvN(s.R)+'/'+fvN(s.T)+' = '+fmtSci(s.vx)+' m/s' });
+    }
+    // v0 from vx and vy
+    if (s.v0 === null && s.vx !== null && s.vy !== null) {
+      s.v0 = Math.sqrt(s.vx * s.vx + s.vy * s.vy); changed = true;
+      log.push({ eq:'Initial speed', formula:'v0 = sqrt(vx^2 + vy^2)', sub:'v0 = sqrt('+fvN(s.vx)+'^2+'+fvN(s.vy)+'^2) = '+fmtSci(s.v0)+' m/s' });
+    }
+    // KE = 0.5*m*v0^2
+    if (s.KE === null && s.m !== null && s.v0 !== null) {
+      s.KE = 0.5 * s.m * s.v0 * s.v0; changed = true;
+      log.push({ eq:'Kinetic Energy', formula:'KE = 0.5*m*v0^2', sub:'KE = 0.5*'+fvN(s.m)+'*'+fvN(s.v0)+'^2 = '+fmtSci(s.KE)+' J' });
+    }
+    // PE = m*g*h0
+    if (s.PE === null && s.m !== null && s.h0 !== null) {
+      s.PE = s.m * s.g * s.h0; changed = true;
+      log.push({ eq:'Potential Energy', formula:'PE = m*g*h0', sub:'PE = '+fvN(s.m)+'*'+fvN(s.g)+'*'+fvN(s.h0)+' = '+fmtSci(s.PE)+' J' });
+    }
+    // E = KE + PE
+    if (s.E === null && s.KE !== null && s.PE !== null) {
+      s.E = s.KE + s.PE; changed = true;
+      log.push({ eq:'Total Energy', formula:'E = KE + PE', sub:'E = '+fmtSci(s.KE)+' + '+fmtSci(s.PE)+' = '+fmtSci(s.E)+' J' });
+    }
+  }
+
+  // -- Update result cards -------------------------------------
+  var PROJ_META = {
+    R:    { label:'Range (R)',       unit:'m',   id:'proj-r-R',     card:'prc-R' },
+    H:    { label:'Max Height (H)',  unit:'m',   id:'proj-r-H',     card:'prc-H' },
+    T:    { label:'Flight Time (T)', unit:'s',   id:'proj-r-T',     card:'prc-T' },
+    v0:   { label:'v0',             unit:'m/s', id:'proj-r-v0',    card:'prc-v0' },
+    vx:   { label:'vx',             unit:'m/s', id:'proj-r-vx',    card:'prc-vx' },
+    vy:   { label:'vy',             unit:'m/s', id:'proj-r-vy',    card:'prc-vy' },
+    KE:   { label:'KE',             unit:'J',   id:'proj-r-KE',    card:'prc-KE' },
+    PE:   { label:'PE',             unit:'J',   id:'proj-r-PE',    card:'prc-PE' },
+    E:    { label:'Total E',        unit:'J',   id:'proj-r-E',     card:'prc-E' },
+    theta:{ label:'Angle',          unit:'deg', id:'proj-r-theta', card:'prc-theta' }
+  };
+
+  Object.keys(PROJ_META).forEach(function(k) {
+    var meta = PROJ_META[k];
+    var el = document.getElementById(meta.id);
+    var card = document.getElementById(meta.card);
+    if (!el) return;
+    var val = s[k];
+    el.textContent = (val !== null && val !== undefined) ? fmtSci(val) + ' ' + meta.unit : '--';
+    if (card) {
+      if (k === solveFor) card.style.cssText = 'border-color:var(--accent);background:rgba(0,212,255,0.08)';
+      else if (userKeys[k]) card.style.cssText = 'border-color:rgba(255,107,53,0.55);background:rgba(255,107,53,0.06)';
+      else if (val !== null) card.style.cssText = 'border-color:rgba(168,255,62,0.55);background:rgba(168,255,62,0.06)';
+      else card.style.cssText = '';
+    }
+  });
+
+  // Live animation result cards
+  var vNow = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
+  var el_v = document.getElementById('proj-r-v');
+  if (el_v) el_v.textContent = fmtSci(vNow) + ' m/s';
+  var el_xy = document.getElementById('proj-r-xy');
+  if (el_xy) el_xy.textContent = fmtSci(proj.x) + ', ' + fmtSci(proj.y);
+
+  // -- Solver steps panel --------------------------------------
+  var box = document.getElementById('proj-solver-steps');
+  if (box) {
+    if (log.length === 0) {
+      box.innerHTML = '<div style="color:var(--text-dim);font-size:11px;line-height:1.9">Enter any known variables above.<br>Leave unknowns blank and the solver chains equations automatically.</div>';
+    } else {
+      var targetSteps = log.filter(function(l){ return l.eq.toLowerCase().indexOf(solveFor.toLowerCase()) >= 0; });
+      var otherSteps  = log.filter(function(l){ return l.eq.toLowerCase().indexOf(solveFor.toLowerCase()) < 0; });
+      var display = otherSteps.concat(targetSteps).slice(-4);
+      box.innerHTML = display.map(function(step) {
+        return '<div style="margin-bottom:7px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;border-left:3px solid rgba(168,255,62,0.6);">' +
+          '<div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent3);margin-bottom:3px">' + step.eq + '</div>' +
+          '<div style="font-family:Space Mono,monospace;font-size:11px;color:var(--accent3);margin-bottom:2px">' + step.formula + '</div>' +
+          '<div style="font-family:Space Mono,monospace;font-size:11px;color:var(--text-mid)">' + step.sub + '</div></div>';
+      }).join('');
+    }
+  }
+
+  // -- Store for animation -------------------------------------
+  proj._v0    = s.v0    || 30;
+  proj._theta = s.theta || 45;
+  proj._g     = s.g     || 9.81;
+  proj._m     = s.m     || 1;
+  proj._h0    = s.h0    || 0;
 
   if (!simRunning) drawProjectile();
 }
 
 function stepProjectile(dt) {
   if (proj.done) { stopSim(); return; }
-  const v0 = getVal('proj-v0', 30);
-  const theta = getVal('proj-angle', 45) * Math.PI / 180;
-  const g = getVal('proj-g', 9.81);
-  const m = getVal('proj-m', 1);
-  const h0 = getVal('proj-h0', 0);
+  var v0    = proj._v0    || 30;
+  var theta = (proj._theta || 45) * Math.PI / 180;
+  var g     = proj._g     || 9.81;
+  var m     = proj._m     || 1;
+  var h0    = proj._h0    || 0;
 
   if (simTime <= dt + 0.001) {
     proj.x = 0; proj.y = h0;
@@ -1316,8 +1477,8 @@ function stepProjectile(dt) {
   }
 
   proj.vy -= g * dt;
-  proj.x += proj.vx * dt;
-  proj.y += proj.vy * dt;
+  proj.x  += proj.vx * dt;
+  proj.y  += proj.vy * dt;
 
   if (document.getElementById('proj-trail').checked) {
     proj.trail.push({ x: proj.x, y: proj.y });
@@ -1325,15 +1486,14 @@ function stepProjectile(dt) {
   }
 
   if (proj.y <= 0 && proj.vy < 0 && simTime > 0.1) {
-    proj.y = 0;
-    proj.done = true;
+    proj.y = 0; proj.done = true;
   }
 
-  const v = Math.sqrt(proj.vx ** 2 + proj.vy ** 2);
-  const ke = 0.5 * m * v * v;
-  setResult('proj-r-v', v, 'm/s');
-  setResult('proj-r-ke', ke, 'J');
-  setResult('proj-r-xy', `${fmt(proj.x, 1)},${fmt(proj.y, 1)}`);
+  var v  = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
+  var ke = 0.5 * m * v * v;
+  var el_v  = document.getElementById('proj-r-v');  if (el_v)  el_v.textContent  = fmtSci(v)  + ' m/s';
+  var el_ke = document.getElementById('proj-r-KE'); if (el_ke) el_ke.textContent = fmtSci(ke) + ' J';
+  var el_xy = document.getElementById('proj-r-xy'); if (el_xy) el_xy.textContent = fmtSci(proj.x) + ', ' + fmtSci(proj.y);
   updateInfoBar(simTime, proj.x, proj.y, v);
 }
 
@@ -1346,10 +1506,10 @@ function drawProjectile() {
   ctx.fillRect(0, 0, W, H);
   drawGrid(ctx, W, H);
 
-  const v0 = getVal('proj-v0', 30);
-  const theta = getVal('proj-angle', 45) * Math.PI / 180;
-  const g = getVal('proj-g', 9.81);
-  const h0 = getVal('proj-h0', 0);
+  const v0    = proj._v0    || 30;
+  const theta = (proj._theta || 45) * Math.PI / 180;
+  const g     = proj._g     || 9.81;
+  const h0    = proj._h0    || 0;
 
   // Scale calculation
   const T_up = v0 * Math.sin(theta) / g;
@@ -1492,36 +1652,122 @@ function resetCollision() {
 }
 
 function updateCollision() {
-  const m1 = getVal('col-m1', 5), m2 = getVal('col-m2', 3);
-  const v1 = getVal('col-v1', 8), v2 = getVal('col-v2', -3);
-  const type = document.getElementById('col-type').value;
+  var s = {
+    m1:  getNullable('col-m1'),
+    m2:  getNullable('col-m2'),
+    v1:  getNullable('col-v1'),
+    v2:  getNullable('col-v2'),
+    v1a: null, v2a: null,
+    p1b: null, p2b: null,
+    KEb: null, KEa: null,
+    pt:  null, KElost: null
+  };
+  var type = document.getElementById('col-type').value;
+  var userKeys = {};
+  Object.keys(s).forEach(function(k){ if (s[k] !== null) userKeys[k] = true; });
+  var solveFor = document.getElementById('col-solveFor').value;
+  var log = [];
 
-  let v1a, v2a;
-  if (type === 'elastic') {
-    v1a = ((m1 - m2) * v1 + 2 * m2 * v2) / (m1 + m2);
-    v2a = (2 * m1 * v1 + (m2 - m1) * v2) / (m1 + m2);
-  } else {
-    const vf = (m1 * v1 + m2 * v2) / (m1 + m2);
-    v1a = vf; v2a = vf;
+  // -- Propagation solver --------------------------------------
+  var changed = true, passes = 0;
+  while (changed && passes < 15) {
+    changed = false; passes++;
+
+    // Momentum before: p1b, p2b, pt
+    if (s.p1b === null && s.m1 !== null && s.v1 !== null) {
+      s.p1b = s.m1 * s.v1; changed = true;
+      log.push({ eq:'Momentum 1', formula:'p1 = m1 * v1', sub:'p1 = '+fvN(s.m1)+'*'+fvN(s.v1)+' = '+fmtSci(s.p1b)+' kg*m/s' });
+    }
+    if (s.p2b === null && s.m2 !== null && s.v2 !== null) {
+      s.p2b = s.m2 * s.v2; changed = true;
+      log.push({ eq:'Momentum 2', formula:'p2 = m2 * v2', sub:'p2 = '+fvN(s.m2)+'*'+fvN(s.v2)+' = '+fmtSci(s.p2b)+' kg*m/s' });
+    }
+    if (s.pt === null && s.p1b !== null && s.p2b !== null) {
+      s.pt = s.p1b + s.p2b; changed = true;
+      log.push({ eq:'Total momentum', formula:'pt = p1 + p2', sub:'pt = '+fmtSci(s.p1b)+' + '+fmtSci(s.p2b)+' = '+fmtSci(s.pt)+' kg*m/s' });
+    }
+    // KE before
+    if (s.KEb === null && s.m1 !== null && s.m2 !== null && s.v1 !== null && s.v2 !== null) {
+      s.KEb = 0.5*s.m1*s.v1*s.v1 + 0.5*s.m2*s.v2*s.v2; changed = true;
+      log.push({ eq:'KE before', formula:'KEb = 0.5*m1*v1^2 + 0.5*m2*v2^2', sub:'KEb = '+fmtSci(0.5*s.m1*s.v1*s.v1)+' + '+fmtSci(0.5*s.m2*s.v2*s.v2)+' = '+fmtSci(s.KEb)+' J' });
+    }
+    // Velocities after collision
+    if (s.v1a === null && s.m1 !== null && s.m2 !== null && s.v1 !== null && s.v2 !== null) {
+      var mt = s.m1 + s.m2;
+      if (type === 'elastic') {
+        s.v1a = ((s.m1 - s.m2)*s.v1 + 2*s.m2*s.v2) / mt;
+        s.v2a = (2*s.m1*s.v1 + (s.m2 - s.m1)*s.v2) / mt;
+        log.push({ eq:'Elastic v1 after', formula:'v1a = ((m1-m2)*v1 + 2*m2*v2)/(m1+m2)',
+          sub:'v1a = (('+fvN(s.m1)+'-'+fvN(s.m2)+')*'+fvN(s.v1)+'+2*'+fvN(s.m2)+'*'+fvN(s.v2)+')/'+fvN(mt)+' = '+fmtSci(s.v1a)+' m/s' });
+        log.push({ eq:'Elastic v2 after', formula:'v2a = (2*m1*v1 + (m2-m1)*v2)/(m1+m2)',
+          sub:'v2a = '+fmtSci(s.v2a)+' m/s' });
+      } else {
+        var vf = s.pt / mt;
+        s.v1a = vf; s.v2a = vf;
+        log.push({ eq:'Inelastic vf', formula:'vf = (m1*v1 + m2*v2)/(m1+m2)',
+          sub:'vf = '+fmtSci(s.pt)+'/'+fvN(mt)+' = '+fmtSci(vf)+' m/s' });
+      }
+      changed = true;
+    }
+    // KE after
+    if (s.KEa === null && s.m1 !== null && s.m2 !== null && s.v1a !== null && s.v2a !== null) {
+      s.KEa = 0.5*s.m1*s.v1a*s.v1a + 0.5*s.m2*s.v2a*s.v2a; changed = true;
+      log.push({ eq:'KE after', formula:'KEa = 0.5*m1*v1a^2 + 0.5*m2*v2a^2', sub:'KEa = '+fmtSci(s.KEa)+' J' });
+    }
+    // KE lost
+    if (s.KElost === null && s.KEb !== null && s.KEa !== null) {
+      s.KElost = s.KEb - s.KEa; changed = true;
+      log.push({ eq:'KE lost', formula:'KElost = KEb - KEa', sub:'KElost = '+fmtSci(s.KEb)+' - '+fmtSci(s.KEa)+' = '+fmtSci(s.KElost)+' J' });
+    }
   }
 
-  const p1b = m1 * v1, p2b = m2 * v2;
-  const ke1b = 0.5 * m1 * v1 * v1, ke2b = 0.5 * m2 * v2 * v2;
-  const ke1a = 0.5 * m1 * v1a * v1a, ke2a = 0.5 * m2 * v2a * v2a;
-  const keb = ke1b + ke2b, kea = ke1a + ke2a;
-  const pt = p1b + p2b, kel = keb - kea;
+  // -- Update result cards -------------------------------------
+  var COL_META = {
+    v1a:    { label:'v1 after',   unit:'m/s',     id:'col-r-v1a', card:'crc-v1a' },
+    v2a:    { label:'v2 after',   unit:'m/s',     id:'col-r-v2a', card:'crc-v2a' },
+    p1b:    { label:'p1 before',  unit:'kg*m/s',  id:'col-r-p1b', card:'crc-p1b' },
+    p2b:    { label:'p2 before',  unit:'kg*m/s',  id:'col-r-p2b', card:'crc-p2b' },
+    KEb:    { label:'KE before',  unit:'J',       id:'col-r-keb', card:'crc-KEb' },
+    KEa:    { label:'KE after',   unit:'J',       id:'col-r-kea', card:'crc-KEa' },
+    pt:     { label:'p total',    unit:'kg*m/s',  id:'col-r-pt',  card:'crc-pt'  },
+    KElost: { label:'KE lost',    unit:'J',       id:'col-r-kel', card:'crc-KElost' }
+  };
+  Object.keys(COL_META).forEach(function(k) {
+    var meta = COL_META[k];
+    var el = document.getElementById(meta.id); if (!el) return;
+    var card = document.getElementById(meta.card);
+    var val = s[k];
+    el.textContent = (val !== null && val !== undefined) ? fmtSci(val) + ' ' + meta.unit : '--';
+    if (card) {
+      if (k === solveFor) card.style.cssText = 'border-color:var(--accent);background:rgba(0,212,255,0.08)';
+      else if (userKeys[k]) card.style.cssText = 'border-color:rgba(255,107,53,0.55);background:rgba(255,107,53,0.06)';
+      else if (val !== null) card.style.cssText = 'border-color:rgba(168,255,62,0.55);background:rgba(168,255,62,0.06)';
+      else card.style.cssText = '';
+    }
+  });
 
-  setResult('col-r-p1b', p1b, 'kg*m/s', 1);
-  setResult('col-r-p2b', p2b, 'kg*m/s', 1);
-  setResult('col-r-v1a', v1a, 'm/s', 2);
-  setResult('col-r-v2a', v2a, 'm/s', 2);
-  setResult('col-r-keb', keb, 'J', 1);
-  setResult('col-r-kea', kea, 'J', 1);
-  setResult('col-r-pt', pt, 'kg*m/s', 1);
-  setResult('col-r-kel', kel, 'J', 1);
+  // -- Solver steps panel --------------------------------------
+  var box = document.getElementById('col-solver-steps');
+  if (box) {
+    if (log.length === 0) {
+      box.innerHTML = '<div style="color:var(--text-dim);font-size:11px;line-height:1.9">Enter m1, v1, m2, v2 above.<br>Solver computes all collision outcomes automatically.</div>';
+    } else {
+      var display = log.slice(-4);
+      box.innerHTML = display.map(function(step) {
+        return '<div style="margin-bottom:7px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;border-left:3px solid rgba(168,255,62,0.6);">' +
+          '<div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent3);margin-bottom:3px">' + step.eq + '</div>' +
+          '<div style="font-family:Space Mono,monospace;font-size:11px;color:var(--accent3);margin-bottom:2px">' + step.formula + '</div>' +
+          '<div style="font-family:Space Mono,monospace;font-size:11px;color:var(--text-mid)">' + step.sub + '</div></div>';
+      }).join('');
+    }
+  }
+
+  // Store for animation
+  col._m1 = s.m1 || 5; col._m2 = s.m2 || 3;
+  col._v1 = s.v1 || 8; col._v2 = s.v2 || -3;
 
   if (!simRunning) {
-    col.b1.v = v1; col.b2.v = v2;
+    col.b1.v = (s.v1 || 8) * 0.05; col.b2.v = (s.v2 || -3) * 0.05;
     col.b1.x = 0.15; col.b2.x = 0.75;
     col.phase = 'pre'; col.collided = false;
     drawCollision();
@@ -1529,9 +1775,9 @@ function updateCollision() {
 }
 
 function stepCollision(dt) {
-  const m1 = getVal('col-m1', 5), m2 = getVal('col-m2', 3);
-  const v1init = getVal('col-v1', 8), v2init = getVal('col-v2', -3);
-  const type = document.getElementById('col-type').value;
+  var m1 = col._m1 || 5, m2 = col._m2 || 3;
+  var v1init = col._v1 || 8, v2init = col._v2 || -3;
+  var type = document.getElementById('col-type').value;
 
   if (simTime <= dt + 0.001) {
     col.b1 = { x: 0.12, v: v1init * 0.05 };
@@ -1582,8 +1828,8 @@ function drawCollision() {
   ctx.fillRect(0, 0, W, H);
   drawGrid(ctx, W, H);
 
-  const m1 = getVal('col-m1', 5), m2 = getVal('col-m2', 3);
-  const v1init = getVal('col-v1', 8), v2init = getVal('col-v2', -3);
+  const m1 = col._m1 || 5, m2 = col._m2 || 3;
+  const v1init = col._v1 || 8, v2init = col._v2 || -3;
   const type = document.getElementById('col-type').value;
 
   const surfY = H * 0.65;
@@ -1662,7 +1908,7 @@ function drawCollision() {
   const barX = margin, barY = H * 0.82, barH = 20, maxW = trackW / 2 - 20;
   const v1_now = col.b1.v / 0.05, v2_now = col.b2.v / 0.05;
   const p1 = m1 * v1_now, p2 = m2 * v2_now;
-  const maxP = Math.max(Math.abs(m1 * getVal('col-v1', 8)), Math.abs(m2 * getVal('col-v2', -3)), Math.abs(p1), Math.abs(p2), 1);
+  const maxP = Math.max(Math.abs(m1 * v1init), Math.abs(m2 * v2init), Math.abs(p1), Math.abs(p2), 1);
 
   // P1 bar
   ctx.fillStyle = 'rgba(30,42,66,0.6)';
@@ -1684,7 +1930,7 @@ function drawCollision() {
 
   // KE bars
   const ke1 = 0.5 * m1 * v1_now ** 2, ke2 = 0.5 * m2 * v2_now ** 2;
-  const maxKE = Math.max(0.5 * m1 * getVal('col-v1', 8) ** 2, 0.5 * m2 * getVal('col-v2', -3) ** 2, ke1, ke2, 1);
+  const maxKE = Math.max(0.5 * m1 * v1init ** 2, 0.5 * m2 * v2init ** 2, ke1, ke2, 1);
   const barY2 = barY + 38;
 
   ctx.fillStyle = 'rgba(30,42,66,0.6)';
@@ -1718,55 +1964,158 @@ let pen = {
 };
 
 function resetPendulum() {
-  const theta0 = getVal('pen-angle', 45) * Math.PI / 180;
+  var theta0 = (getNullable('pen-angle') || 45) * Math.PI / 180;
   pen = { theta: theta0, omega: 0, trail: [] };
   updatePendulum();
 }
 
 function updatePendulum() {
-  const L = getVal('pen-L', 3), m = getVal('pen-m', 2);
-  const g = getVal('pen-g', 9.81);
-
-  const T = 2 * Math.PI * Math.sqrt(L / g);
-  const f = 1 / T;
-  const omega_nat = Math.sqrt(g / L);
-
-  const v = Math.sqrt(2 * g * L * (1 - Math.cos(pen.theta)));
-  const h = L * (1 - Math.cos(pen.theta));
-  const PE = m * g * h;
-  const KE = 0.5 * m * v * v;
-  const E = PE + KE;
-
-  setResult('pen-r-T', T, 's');
-  setResult('pen-r-f', f, 'Hz', 3);
-  setResult('pen-r-ke', KE, 'J');
-  setResult('pen-r-pe', PE, 'J');
-  setResult('pen-r-E', E, 'J');
-  setResult('pen-r-v', v, 'm/s');
-  setResult('pen-r-angle', pen.theta * 180 / Math.PI, ' deg', 1);
-  setResult('pen-r-omega', pen.omega, 'rad/s');
-
-  // Energy bars
-  const maxE = m * g * L * (1 - Math.cos(getVal('pen-angle', 45) * Math.PI / 180));
-  const updateBar = (barId, valId, val, maxVal) => {
-    const pct = maxVal > 0 ? Math.min(val / maxVal * 100, 100) : 0;
-    document.getElementById(barId).style.width = pct + '%';
-    document.getElementById(valId).textContent = fmt(val, 1) + ' J';
+  var s = {
+    L:     getNullable('pen-L'),
+    m:     getNullable('pen-m'),
+    theta0:getNullable('pen-angle'),
+    T:     getNullable('pen-T'),
+    g:     getNullable('pen-g') || 9.81,
+    f: null, omega: null, v: null,
+    KE: null, PE: null, E: null
   };
-  updateBar('pen-ke-bar', 'pen-ke-val', KE, maxE || 1);
-  updateBar('pen-pe-bar', 'pen-pe-val', PE, maxE || 1);
-  updateBar('pen-E-bar', 'pen-E-val', E, maxE || 1);
+  var userKeys = {};
+  Object.keys(s).forEach(function(k){ if (s[k] !== null) userKeys[k] = true; });
+  var solveFor = document.getElementById('pen-solveFor').value;
+  var log = [];
+
+  // -- Propagation solver --------------------------------------
+  var changed = true, passes = 0;
+  while (changed && passes < 15) {
+    changed = false; passes++;
+
+    // T = 2*pi*sqrt(L/g)
+    if (s.T === null && s.L !== null) {
+      s.T = 2 * Math.PI * Math.sqrt(s.L / s.g); changed = true;
+      log.push({ eq:'Period', formula:'T = 2*pi*sqrt(L/g)', sub:'T = 2pi*sqrt('+fvN(s.L)+'/'+fvN(s.g)+') = '+fmtSci(s.T)+' s' });
+    }
+    // L from T
+    if (s.L === null && s.T !== null) {
+      s.L = s.g * (s.T / (2*Math.PI)) * (s.T / (2*Math.PI)); changed = true;
+      log.push({ eq:'Length from T', formula:'L = g*(T/2pi)^2', sub:'L = '+fvN(s.g)+'*('+fvN(s.T)+'/2pi)^2 = '+fmtSci(s.L)+' m' });
+    }
+    // f = 1/T
+    if (s.f === null && s.T !== null && s.T > 1e-9) {
+      s.f = 1 / s.T; changed = true;
+      log.push({ eq:'Frequency', formula:'f = 1/T', sub:'f = 1/'+fvN(s.T)+' = '+fmtSci(s.f)+' Hz' });
+    }
+    // omega = sqrt(g/L)
+    if (s.omega === null && s.L !== null) {
+      s.omega = Math.sqrt(s.g / s.L); changed = true;
+      log.push({ eq:'Angular frequency', formula:'omega = sqrt(g/L)', sub:'omega = sqrt('+fvN(s.g)+'/'+fvN(s.L)+') = '+fmtSci(s.omega)+' rad/s' });
+    }
+    // v = sqrt(2gL(1-cos(theta0)))
+    var th = pen.theta !== undefined ? pen.theta : (s.theta0 || 45) * Math.PI / 180;
+    if (s.v === null && s.L !== null) {
+      s.v = Math.sqrt(Math.max(0, 2 * s.g * s.L * (1 - Math.cos(th)))); changed = true;
+      log.push({ eq:'Max speed', formula:'v = sqrt(2gL(1-cos(theta)))', sub:'v = sqrt(2*'+fvN(s.g)+'*'+fvN(s.L)+'*(1-cos('+fvN(th*180/Math.PI,1)+'))) = '+fmtSci(s.v)+' m/s' });
+    }
+    // PE = m*g*L*(1-cos(theta))
+    if (s.PE === null && s.m !== null && s.L !== null) {
+      s.PE = s.m * s.g * s.L * (1 - Math.cos(th)); changed = true;
+      log.push({ eq:'Potential Energy', formula:'PE = mgL(1-cos(theta))', sub:'PE = '+fvN(s.m)+'*'+fvN(s.g)+'*'+fvN(s.L)+'*(1-cos) = '+fmtSci(s.PE)+' J' });
+    }
+    // KE = 0.5*m*v^2
+    if (s.KE === null && s.m !== null && s.v !== null) {
+      s.KE = 0.5 * s.m * s.v * s.v; changed = true;
+      log.push({ eq:'Kinetic Energy', formula:'KE = 0.5*m*v^2', sub:'KE = 0.5*'+fvN(s.m)+'*'+fvN(s.v)+'^2 = '+fmtSci(s.KE)+' J' });
+    }
+    // E = KE + PE  (at bottom, PE=0 so E=KE)
+    if (s.E === null && s.KE !== null && s.PE !== null) {
+      s.E = s.KE + s.PE; changed = true;
+      log.push({ eq:'Total Energy', formula:'E = KE + PE', sub:'E = '+fmtSci(s.KE)+' + '+fmtSci(s.PE)+' = '+fmtSci(s.E)+' J' });
+    }
+    // m from KE and v
+    if (s.m === null && s.KE !== null && s.v !== null && s.v > 1e-9) {
+      s.m = 2 * s.KE / (s.v * s.v); changed = true;
+      log.push({ eq:'Mass from KE', formula:'m = 2*KE/v^2', sub:'m = 2*'+fmtSci(s.KE)+'/'+fvN(s.v)+'^2 = '+fmtSci(s.m)+' kg' });
+    }
+    // g from T and L
+    if (s.g === null && s.T !== null && s.L !== null) {
+      s.g = s.L * (2*Math.PI/s.T) * (2*Math.PI/s.T); changed = true;
+      log.push({ eq:'Gravity from T,L', formula:'g = L*(2pi/T)^2', sub:'g = '+fvN(s.L)+'*(2pi/'+fvN(s.T)+')^2 = '+fmtSci(s.g)+' m/s^2' });
+    }
+  }
+
+  // -- Update result cards -------------------------------------
+  var PEN_META = {
+    T:     { label:'Period (T)',    unit:'s',      id:'pen-r-T',     card:'enc-T' },
+    f:     { label:'Frequency',    unit:'Hz',     id:'pen-r-f',     card:'enc-f' },
+    KE:    { label:'KE',           unit:'J',      id:'pen-r-ke',    card:'enc-KE' },
+    PE:    { label:'PE',           unit:'J',      id:'pen-r-pe',    card:'enc-PE' },
+    E:     { label:'Total E',      unit:'J',      id:'pen-r-E',     card:'enc-E' },
+    v:     { label:'Speed',        unit:'m/s',    id:'pen-r-v',     card:'enc-v' },
+    omega: { label:'omega',        unit:'rad/s',  id:'pen-r-omega', card:'enc-omega' },
+    L:     { label:'Length (L)',   unit:'m',      id:'pen-r-L',     card:'enc-L' },
+    g:     { label:'Gravity (g)',  unit:'m/s^2',  id:'pen-r-g',     card:'enc-g' }
+  };
+  Object.keys(PEN_META).forEach(function(k) {
+    var meta = PEN_META[k];
+    var el = document.getElementById(meta.id); if (!el) return;
+    var card = document.getElementById(meta.card);
+    var val = s[k];
+    el.textContent = (val !== null && val !== undefined) ? fmtSci(val) + ' ' + meta.unit : '--';
+    if (card) {
+      if (k === solveFor) card.style.cssText = 'border-color:var(--accent);background:rgba(0,212,255,0.08)';
+      else if (userKeys[k]) card.style.cssText = 'border-color:rgba(255,107,53,0.55);background:rgba(255,107,53,0.06)';
+      else if (val !== null) card.style.cssText = 'border-color:rgba(168,255,62,0.55);background:rgba(168,255,62,0.06)';
+      else card.style.cssText = '';
+    }
+  });
+
+  // Angle live card
+  var el_ang = document.getElementById('pen-r-angle');
+  if (el_ang) el_ang.textContent = fmtSci(pen.theta * 180 / Math.PI) + ' deg';
+  var el_om = document.getElementById('pen-r-omega');
+  if (el_om && !s.omega) el_om.textContent = fmtSci(pen.omega) + ' rad/s';
+
+  // -- Solver steps panel --------------------------------------
+  var box = document.getElementById('pen-solver-steps');
+  if (box) {
+    if (log.length === 0) {
+      box.innerHTML = '<div style="color:var(--text-dim);font-size:11px;line-height:1.9">Enter any known variables above.<br>Solver chains T, f, omega, KE, PE, E automatically.</div>';
+    } else {
+      var display = log.slice(-4);
+      box.innerHTML = display.map(function(step) {
+        return '<div style="margin-bottom:7px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;border-left:3px solid rgba(168,255,62,0.6);">' +
+          '<div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent3);margin-bottom:3px">' + step.eq + '</div>' +
+          '<div style="font-family:Space Mono,monospace;font-size:11px;color:var(--accent3);margin-bottom:2px">' + step.formula + '</div>' +
+          '<div style="font-family:Space Mono,monospace;font-size:11px;color:var(--text-mid)">' + step.sub + '</div></div>';
+      }).join('');
+    }
+  }
+
+  // -- Energy bars ---------------------------------------------
+  var maxE = Math.max(Math.abs(s.KE || 0), Math.abs(s.PE || 0), Math.abs(s.E || 0), 1);
+  function setBar(bId, lId, val) {
+    var b = document.getElementById(bId), l = document.getElementById(lId);
+    if (!b || !l) return;
+    b.style.width = (val !== null ? Math.min(Math.abs(val)/maxE*100, 100) : 0) + '%';
+    l.textContent = (val !== null ? fmtSci(val) : '--') + ' J';
+  }
+  setBar('pen-ke-bar', 'pen-ke-val', s.KE);
+  setBar('pen-pe-bar', 'pen-pe-val', s.PE);
+  setBar('pen-E-bar',  'pen-E-val',  s.E);
+
+  // Store for animation
+  pen._L = s.L || 3; pen._m = s.m || 2;
+  pen._g = s.g || 9.81; pen._theta0 = (s.theta0 || 45) * Math.PI / 180;
 
   if (!simRunning) drawPendulum();
 }
 
 function stepPendulum(dt) {
-  const L = getVal('pen-L', 3), m = getVal('pen-m', 2);
-  const g = getVal('pen-g', 9.81), damp = getVal('pen-damp', 0);
+  var L = pen._L || 3, m = pen._m || 2;
+  var g = pen._g || 9.81, damp = getNullable('pen-damp') || 0;
 
   if (simTime <= dt + 0.001) {
-    const theta0 = getVal('pen-angle', 45) * Math.PI / 180;
-    pen.theta = theta0; pen.omega = 0; pen.trail = [];
+    pen.theta = pen._theta0 || (45 * Math.PI / 180);
+    pen.omega = 0; pen.trail = [];
   }
 
   // RK4 integration for accuracy
@@ -1792,8 +2141,8 @@ function drawPendulum() {
   ctx.fillRect(0, 0, W, H);
   drawGrid(ctx, W, H);
 
-  const L = getVal('pen-L', 3), m = getVal('pen-m', 2);
-  const g = getVal('pen-g', 9.81);
+  const L = pen._L || 3, m = pen._m || 2;
+  const g = pen._g || 9.81;
 
   const pivotX = W / 2, pivotY = H * 0.2;
   const pixL = Math.min(H * 0.55, W * 0.35);
@@ -1804,7 +2153,7 @@ function drawPendulum() {
   const bobR = 14;
 
   // Pendulum arc
-  const theta0 = getVal('pen-angle', 45) * Math.PI / 180;
+  const theta0 = pen._theta0 || (45 * Math.PI / 180);
   ctx.strokeStyle = 'rgba(0,212,255,0.1)';
   ctx.lineWidth = 80;
   ctx.lineCap = 'round';
