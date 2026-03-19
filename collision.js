@@ -261,6 +261,8 @@ var COL_EQUATIONS = [
 var COL_META = {
   v1a:    { label:'v1 after',  unit:'m/s',    card:'crc-v1a',    val:'col-r-v1a' },
   v2a:    { label:'v2 after',  unit:'m/s',    card:'crc-v2a',    val:'col-r-v2a' },
+  m1:     { label:'Mass 1',    unit:'kg',     card:'crc-m1',     val:'col-r-m1'  },
+  m2:     { label:'Mass 2',    unit:'kg',     card:'crc-m2',     val:'col-r-m2'  },
   p1b:    { label:'p1 before', unit:'kg·m/s', card:'crc-p1b',    val:'col-r-p1b' },
   p2b:    { label:'p2 before', unit:'kg·m/s', card:'crc-p2b',    val:'col-r-p2b' },
   KEb:    { label:'KE before', unit:'J',      card:'crc-KEb',    val:'col-r-keb' },
