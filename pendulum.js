@@ -264,13 +264,15 @@ function _setBar(barId, lblId, val, maxVal) {
 }
 
 /* ------------------------------------------------------------
-   STEP (RK4 for accuracy at large angles)
+   STEP (RK4 — accurate at all amplitudes, no Euler drift)
    ------------------------------------------------------------ */
 function stepPendulum(dt) {
-  var L    = pen._L, g = pen._g;
-  var damp = pen._damp;
-  var m    = pen._m;
+  var L    = pen._L    || 3;
+  var g    = pen._g    || 9.81;
+  var damp = pen._damp || 0;
+  var m    = pen._m    || 2;
 
+  /* Initialise on first frame */
   if (simTime <= dt + 0.001) {
     pen.theta = pen._theta0;
     pen.omega = 0;
@@ -278,29 +280,86 @@ function stepPendulum(dt) {
     pen.data  = [];
   }
 
-  /* RK4 integration — much more accurate than Euler at large angles */
-  var substeps = 4;
-  var dts = dt / substeps;
-  for (var s = 0; s < substeps; s++) {
-    var alpha = -(g / L) * Math.sin(pen.theta) - damp * pen.omega;
-    pen.omega += alpha * dts;
-    pen.theta += pen.omega * dts;
+  /* ----------------------------------------------------------
+     Full RK4 integration (not Euler-in-a-loop).
+     
+     State vector: [theta, omega]
+     Equation of motion: d²θ/dt² = -(g/L)·sin(θ) - b·ω
+     
+     RK4 steps:
+       k1 = f(y)
+       k2 = f(y + dt/2 · k1)
+       k3 = f(y + dt/2 · k2)
+       k4 = f(y + dt   · k3)
+       y_new = y + dt/6 · (k1 + 2k2 + 2k3 + k4)
+     ---------------------------------------------------------- */
+  function dOmega(theta, omega) {
+    return -(g / L) * Math.sin(theta) - damp * omega;
+  }
+
+  /* Sub-step for extra stability at dt > ideal */
+  var SUBSTEPS = 4;
+  var dts = dt / SUBSTEPS;
+
+  for (var si = 0; si < SUBSTEPS; si++) {
+    var theta = pen.theta;
+    var omega = pen.omega;
+
+    /* k1 */
+    var k1_t = omega;
+    var k1_w = dOmega(theta, omega);
+
+    /* k2 */
+    var t2 = theta + 0.5 * dts * k1_t;
+    var w2 = omega + 0.5 * dts * k1_w;
+    var k2_t = w2;
+    var k2_w = dOmega(t2, w2);
+
+    /* k3 */
+    var t3 = theta + 0.5 * dts * k2_t;
+    var w3 = omega + 0.5 * dts * k2_w;
+    var k3_t = w3;
+    var k3_w = dOmega(t3, w3);
+
+    /* k4 */
+    var t4 = theta + dts * k3_t;
+    var w4 = omega + dts * k3_w;
+    var k4_t = w4;
+    var k4_w = dOmega(t4, w4);
+
+    /* Combine */
+    pen.theta += (dts / 6) * (k1_t + 2*k2_t + 2*k3_t + k4_t);
+    pen.omega += (dts / 6) * (k1_w + 2*k2_w + 2*k3_w + k4_w);
+  }
+
+  /* Clamp angle to ±π to prevent wrap-around glitch on full rotation */
+  while (pen.theta >  Math.PI) pen.theta -= 2 * Math.PI;
+  while (pen.theta < -Math.PI) pen.theta += 2 * Math.PI;
+
+  /* Kill micro-oscillation on heavily damped pendulum */
+  if (Math.abs(pen.omega) < 1e-5 && Math.abs(pen.theta) < 1e-4) {
+    pen.omega = 0;
+    pen.theta = 0;
   }
 
   /* Trail */
   pen.trail.push({ theta: pen.theta });
   if (pen.trail.length > 350) pen.trail.shift();
 
-  /* Record data */
-  var h   = L * (1 - Math.cos(pen.theta));
-  var PE  = m * g * h;
+  /* Record data for CSV */
+  var h  = L * (1 - Math.cos(pen.theta));
+  var PE = m * g * h;
   var vsp = Math.abs(pen.omega) * L;
-  var KE  = 0.5 * m * vsp * vsp;
-  pen.data.push([parseFloat(simTime.toFixed(3)),
+  var KE = 0.5 * m * vsp * vsp;
+  pen.data.push([
+    parseFloat(simTime.toFixed(3)),
     parseFloat((pen.theta * 180 / Math.PI).toFixed(3)),
     parseFloat(pen.omega.toFixed(4)),
-    parseFloat(KE.toFixed(3)), parseFloat(PE.toFixed(3))]);
+    parseFloat(KE.toFixed(3)),
+    parseFloat(PE.toFixed(3))
+  ]);
 
+  /* Update sidebar live values (angle + omega cards + energy bars) */
   updatePendulum();
   updateInfoBar(simTime, pen.theta * 180 / Math.PI, 0, Math.abs(pen.omega));
 }
