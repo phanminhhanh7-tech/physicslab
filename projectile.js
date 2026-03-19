@@ -1,43 +1,101 @@
 /* ============================================================
-   projectile.js — Projectile Motion Simulation
-   Handles: solver, animation state, step/draw functions
-   Physics assumptions: no air resistance, flat ground, constant g
+   projectile.js — Projectile Motion Simulation v2
+   
+   Physics model:
+     vx = v0 · cos(θ)
+     vy = v0 · sin(θ)
+     x(t)  = vx · t
+     y(t)  = h0 + vy·t − ½·g·t²
+   
+   Flight time (cliff mode h0 > 0) — quadratic formula:
+     0 = h0 + vy·T − ½·g·T²
+     ½g·T² − vy·T − h0 = 0
+     T = [vy + √(vy² + 2·g·h0)] / g   (positive root)
+   
+   Flight time (ground mode h0 = 0):
+     T = 2·vy / g
+   
+   Max height above ground:
+     H = h0 + vy² / (2g)
+   
+   Platform visual: FIXED pixel position — NEVER moves.
+   Height h0 is shown as a label + dashed vertical indicator.
    ============================================================ */
 
 'use strict';
 
 /* ------------------------------------------------------------
-   STATE
+   ANIMATION STATE
    ------------------------------------------------------------ */
 var proj = {
-  x: 0, y: 0,        // current position (m)
-  vx: 0, vy: 0,      // current velocity (m/s)
-  trail: [],          // [{x,y}] trail points
-  done: false,        // has projectile landed?
-  data: [],           // [{t,x,y,vx,vy,v,KE}] for CSV export
-  // Solver-computed launch params (used by step + draw):
+  x: 0, y: 0,        /* current physics position (m)         */
+  vx: 0, vy: 0,      /* current velocity (m/s)               */
+  trail: [],          /* [{x,y}] physics positions for trail  */
+  done: false,        /* true once ball has landed            */
+  data: [],           /* rows for CSV export                  */
+
+  /* Launch parameters (set by solver, used by step + draw): */
   _v0: 30, _theta: 45, _g: 9.81, _m: 1, _h0: 0
+};
+
+/* ------------------------------------------------------------
+   FIXED LAYOUT CONSTANTS
+   These pixel values define the platform and ground positions
+   and NEVER change regardless of h0.
+   ------------------------------------------------------------ */
+var PROJ_LAYOUT = {
+  margin:      60,    /* px — left/right margin                */
+  groundFrac:  0.82,  /* fraction of canvas height for ground  */
+  platW:       90,    /* px — platform width                   */
+  platH:       12,    /* px — platform height (bar)            */
+  platYFrac:   0.82,  /* same as ground — platform sits ON ground */
+  ballR:       11     /* px — projectile radius                */
 };
 
 /* ------------------------------------------------------------
    RESET
    ------------------------------------------------------------ */
 function resetProjectile() {
-  proj = { x: 0, y: 0, vx: 0, vy: 0, trail: [], done: false, data: [],
-           _v0: proj._v0, _theta: proj._theta, _g: proj._g,
-           _m: proj._m, _h0: proj._h0 };
+  proj = {
+    x: 0, y: proj._h0, vx: 0, vy: 0,
+    trail: [], done: false, data: [],
+    _v0: proj._v0, _theta: proj._theta, _g: proj._g,
+    _m: proj._m, _h0: proj._h0
+  };
   updateProjectile();
 }
 
 /* ------------------------------------------------------------
+   SOLVER HELPERS
+
+   solveFlightTime — returns the positive flight time T using
+   the quadratic formula, valid for both h0=0 and h0>0 (cliff).
+
+   Equation: h0 + vy·T − ½g·T² = 0
+   Rearranged: ½g·T² − vy·T − h0 = 0
+   Quadratic: a=½g, b=−vy, c=−h0
+   T = [vy + √(vy² + 2g·h0)] / g   (positive root)
+
+   When h0 = 0 this reduces to T = 2vy/g (standard formula).
+   ------------------------------------------------------------ */
+function solveFlightTime(vy, g, h0) {
+  if (g <= 0) return 0;
+  h0 = h0 || 0;
+  /* discriminant = vy² + 2·g·h0 */
+  var disc = vy * vy + 2 * g * h0;
+  if (disc < 0) return 0; /* no real solution — shouldn't happen for valid inputs */
+  return (vy + Math.sqrt(disc)) / g;
+}
+
+/* ------------------------------------------------------------
    EQUATIONS REGISTRY
-   Each equation: { name, formula, solve: { key: fn(state)->number|null }, buildSub: fn }
-   Guards: return null if prereqs missing, division by zero, sqrt<0
+   All physics equations — unchanged from original.
+   The solver propagates known → unknown using these rules.
    ------------------------------------------------------------ */
 var PROJ_EQUATIONS = [
 
-  /* vx = v0 * cos(theta) */
-  { name: 'Horizontal velocity', formula: 'vx = v0 * cos(θ)',
+  /* vx = v0 · cos(θ) */
+  { name: 'Horizontal velocity', formula: 'vx = v0 × cos(θ)',
     solve: {
       vx: function(s) {
         if (s.v0 === null || s.theta === null) return null;
@@ -51,14 +109,12 @@ var PROJ_EQUATIONS = [
       }
     },
     buildSub: function(s) {
-      if (s.vx !== null)
-        return 'vx = ' + fvN(s.v0) + ' × cos(' + fvN(s.theta, 1) + '°) = ' + fmtSci(s.vx) + ' m/s';
-      return 'v0 = ' + fmtSci(s.vx) + ' / cos(' + fvN(s.theta, 1) + '°) = ' + fmtSci(s.v0) + ' m/s';
+      return 'vx = ' + fvN(s.v0) + ' × cos(' + fvN(s.theta, 1) + '°) = ' + fmtSci(s.vx) + ' m/s';
     }
   },
 
-  /* vy = v0 * sin(theta) */
-  { name: 'Vertical velocity', formula: 'vy = v0 * sin(θ)',
+  /* vy = v0 · sin(θ) */
+  { name: 'Vertical velocity', formula: 'vy = v0 × sin(θ)',
     solve: {
       vy: function(s) {
         if (s.v0 === null || s.theta === null) return null;
@@ -82,7 +138,7 @@ var PROJ_EQUATIONS = [
     }
   },
 
-  /* v0 from vx and vy */
+  /* v0 from components */
   { name: 'Launch speed', formula: 'v0 = √(vx² + vy²)',
     solve: {
       v0: function(s) {
@@ -95,7 +151,7 @@ var PROJ_EQUATIONS = [
     }
   },
 
-  /* theta from vx and vy */
+  /* θ from components */
   { name: 'Launch angle', formula: 'θ = atan2(vy, vx)',
     solve: {
       theta: function(s) {
@@ -108,7 +164,7 @@ var PROJ_EQUATIONS = [
     }
   },
 
-  /* H = h0 + vy²/(2g)  — max height */
+  /* H = h0 + vy²/(2g) — max height above ground */
   { name: 'Max height', formula: 'H = h0 + vy² / (2g)',
     solve: {
       H: function(s) {
@@ -133,26 +189,21 @@ var PROJ_EQUATIONS = [
     }
   },
 
-  /* T = vy/g + √(2H/g)  — total flight time (launch from h0 to ground) */
-  { name: 'Flight time', formula: 'T = vy/g + √(2H/g)',
+  /* T — flight time using quadratic (works for both h0=0 and h0>0) */
+  { name: 'Flight time', formula: 'T = [vy + √(vy² + 2g·h0)] / g',
     solve: {
       T: function(s) {
-        if (s.vy === null || s.H === null) return null;
-        var g = s.g;
-        return s.vy / g + Math.sqrt(2 * s.H / g);
-      },
-      g: function(s) {
-        if (s.T === null || s.H === null || s.vy === null) return null;
-        // Iterative — skip (too complex to invert analytically)
-        return null;
+        if (s.vy === null) return null;
+        return solveFlightTime(s.vy, s.g, s.h0 || 0);
       }
     },
     buildSub: function(s) {
-      return 'T = ' + fvN(s.vy) + '/' + fvN(s.g) + ' + √(2×' + fvN(s.H, 2) + '/' + fvN(s.g) + ') = ' + fmtSci(s.T) + ' s';
+      var h0 = s.h0 || 0;
+      return 'T = [' + fvN(s.vy) + ' + √(' + fvN(s.vy) + '² + 2×' + fvN(s.g) + '×' + fvN(h0) + ')] / ' + fvN(s.g) + ' = ' + fmtSci(s.T) + ' s';
     }
   },
 
-  /* R = vx * T  — range */
+  /* R = vx · T */
   { name: 'Range', formula: 'R = vx × T',
     solve: {
       R: function(s) {
@@ -194,11 +245,11 @@ var PROJ_EQUATIONS = [
     }
   },
 
-  /* PE = mgh0 */
+  /* PE = m·g·h0 */
   { name: 'Potential Energy', formula: 'PE = m × g × h0',
     solve: {
       PE: function(s) {
-        if (s.m === null || s.h0 === null) return null;
+        if (s.m === null || s.h0 === null || s.h0 <= 0) return null;
         return s.m * s.g * s.h0;
       },
       m: function(s) {
@@ -226,21 +277,21 @@ var PROJ_EQUATIONS = [
 
 /* Metadata for result cards */
 var PROJ_META = {
-  R:     { label:'Range (R)',      unit:'m',   card:'prc-R',     val:'proj-r-R' },
-  H:     { label:'Max Height (H)', unit:'m',   card:'prc-H',     val:'proj-r-H' },
-  T:     { label:'Flight Time',    unit:'s',   card:'prc-T',     val:'proj-r-T' },
-  v0:    { label:'v0',             unit:'m/s', card:'prc-v0',    val:'proj-r-v0' },
-  vx:    { label:'vx',             unit:'m/s', card:'prc-vx',    val:'proj-r-vx' },
-  vy:    { label:'vy (initial)',    unit:'m/s', card:'prc-vy',    val:'proj-r-vy' },
-  KE:    { label:'KE',             unit:'J',   card:'prc-KE',    val:'proj-r-KE' },
-  PE:    { label:'PE',             unit:'J',   card:'prc-PE',    val:'proj-r-PE' },
-  E:     { label:'Total E',        unit:'J',   card:'prc-E',     val:'proj-r-E' },
+  R:     { label:'Range (R)',      unit:'m',   card:'prc-R',     val:'proj-r-R'     },
+  H:     { label:'Max Height (H)', unit:'m',   card:'prc-H',     val:'proj-r-H'     },
+  T:     { label:'Flight Time',    unit:'s',   card:'prc-T',     val:'proj-r-T'     },
+  v0:    { label:'v0',             unit:'m/s', card:'prc-v0',    val:'proj-r-v0'    },
+  vx:    { label:'vx',             unit:'m/s', card:'prc-vx',    val:'proj-r-vx'    },
+  vy:    { label:'vy (initial)',   unit:'m/s', card:'prc-vy',    val:'proj-r-vy'    },
+  KE:    { label:'KE',             unit:'J',   card:'prc-KE',    val:'proj-r-KE'    },
+  PE:    { label:'PE',             unit:'J',   card:'prc-PE',    val:'proj-r-PE'    },
+  E:     { label:'Total E',        unit:'J',   card:'prc-E',     val:'proj-r-E'     },
   theta: { label:'Angle (θ)',      unit:'deg', card:'prc-theta', val:'proj-r-theta' },
-  g:     { label:'Gravity (g)',    unit:'m/s²',card:'prc-g',     val:'proj-r-g' }
+  g:     { label:'Gravity (g)',    unit:'m/s²',card:'prc-g',     val:'proj-r-g'     }
 };
 
 /* ------------------------------------------------------------
-   UPDATE (solver + UI)
+   UPDATE — solver + UI refresh
    ------------------------------------------------------------ */
 function updateProjectile() {
   /* 1. Read inputs */
@@ -252,18 +303,19 @@ function updateProjectile() {
     T:     getNullable('proj-T'),
     m:     getNullable('proj-m'),
     h0:    getNullable('proj-h0') !== null ? getNullable('proj-h0') : 0,
-    g:     getNullable('proj-g') !== null ? getNullable('proj-g') : 9.81,
+    g:     getNullable('proj-g')  !== null ? getNullable('proj-g')  : 9.81,
     vx: null, vy: null, KE: null, PE: null, E: null
   };
 
-  /* 2. Input validation */
+  /* 2. Validation */
   showInputError('proj-g',     validateInput(s.g,     { positive: true, label: 'g' }));
   showInputError('proj-v0',    validateInput(s.v0,    { min: 0, label: 'v0' }));
   showInputError('proj-angle', validateInput(s.theta, { min: -90, max: 90, label: 'θ' }));
+  showInputError('proj-h0',    validateInput(s.h0,    { min: 0, label: 'h0' }));
 
-  /* 3. Track user-provided keys */
+  /* 3. Track user keys */
   var userKeys = {};
-  Object.keys(s).forEach(function(k){ if (s[k] !== null) userKeys[k] = true; });
+  Object.keys(s).forEach(function(k) { if (s[k] !== null) userKeys[k] = true; });
   var solveFor = document.getElementById('proj-solveFor').value;
 
   /* 4. Run solver */
@@ -295,7 +347,7 @@ function updateProjectile() {
 }
 
 /* ------------------------------------------------------------
-   STEP (physics integration, called each animation frame)
+   STEP — sub-stepped Euler, frame by frame
    ------------------------------------------------------------ */
 function stepProjectile(dt) {
   if (proj.done) { stopSim(); return; }
@@ -306,48 +358,44 @@ function stepProjectile(dt) {
   var m     = proj._m;
   var h0    = proj._h0;
 
-  /* Initialise on first frame (simTime very small) */
+  /* Initialise on first frame */
   if (simTime <= dt + 0.001) {
-    proj.x     = 0;
-    proj.y     = h0;
-    proj.vx    = v0 * Math.cos(theta);
-    proj.vy    = v0 * Math.sin(theta);
+    proj.x    = 0;
+    proj.y    = h0;          /* starts at launch height (m) */
+    proj.vx   = v0 * Math.cos(theta);
+    proj.vy   = v0 * Math.sin(theta);
     proj.trail = [];
     proj.data  = [];
     proj.done  = false;
   }
 
-  /* ----------------------------------------------------------
-     Sub-stepped Euler integration.
-     Breaking dt into smaller chunks keeps the trajectory
-     accurate and prevents the ball from "tunnelling" through
-     the ground on slow frames.
-     ---------------------------------------------------------- */
+  /* Sub-stepped Euler — 4 steps per frame for accuracy */
   var SUBSTEPS = 4;
   var dts = dt / SUBSTEPS;
 
   for (var si = 0; si < SUBSTEPS; si++) {
-    /* Apply gravity to vertical velocity, then move */
     proj.vy -= g * dts;
     proj.x  += proj.vx * dts;
     proj.y  += proj.vy * dts;
 
-    /* Ground clamp — stop exactly at y = 0, never below */
+    /* Ground collision — snap to y=0, never below */
     if (proj.y <= 0 && simTime > 0.05) {
       proj.y    = 0;
+      proj.vx   = 0;
+      proj.vy   = 0;
       proj.done = true;
-      break;          /* stop sub-steps once landed */
+      break;
     }
   }
 
-  /* Trail — only when checkbox is ticked */
+  /* Trail */
   var trailEl = document.getElementById('proj-trail');
   if (trailEl && trailEl.checked) {
     proj.trail.push({ x: proj.x, y: proj.y });
-    if (proj.trail.length > 600) proj.trail.shift();
+    if (proj.trail.length > 800) proj.trail.shift();
   }
 
-  /* Record data for CSV */
+  /* CSV data */
   var speed = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
   proj.data.push([
     parseFloat(simTime.toFixed(3)),
@@ -359,20 +407,122 @@ function stepProjectile(dt) {
     parseFloat((0.5 * m * speed * speed).toFixed(3))
   ]);
 
-  /* Update live result cards */
+  /* Live cards */
   var ke = 0.5 * m * speed * speed;
-  var el_v  = document.getElementById('proj-r-v');
-  var el_ke = document.getElementById('proj-r-KE');
-  var el_xy = document.getElementById('proj-r-xy');
-  if (el_v)  el_v.textContent  = fmtSci(speed) + ' m/s';
-  if (el_ke) el_ke.textContent = fmtSci(ke) + ' J';
-  if (el_xy) el_xy.textContent = fmtSci(proj.x) + ', ' + fmtSci(proj.y);
+  var elv  = document.getElementById('proj-r-v');
+  var elke = document.getElementById('proj-r-KE');
+  var elxy = document.getElementById('proj-r-xy');
+  if (elv)  elv.textContent  = fmtSci(speed) + ' m/s';
+  if (elke) elke.textContent = fmtSci(ke) + ' J';
+  if (elxy) elxy.textContent = fmtSci(proj.x) + ', ' + fmtSci(proj.y);
 
   updateInfoBar(simTime, proj.x, proj.y, speed);
 }
 
+/* ============================================================
+   DRAW FUNCTIONS
+   ============================================================ */
+
 /* ------------------------------------------------------------
-   DRAW
+   drawPlatform — FIXED position, NEVER moves based on h0.
+   Renders a solid platform ledge at the launch point.
+   ------------------------------------------------------------ */
+function drawPlatform(ctx, platX, groundY, h0) {
+  var L = PROJ_LAYOUT;
+  var pw = L.platW, ph = L.platH;
+
+  /* Platform bar */
+  ctx.save();
+  ctx.shadowColor = 'rgba(168,255,62,0.6)'; ctx.shadowBlur = 10;
+  var grad = ctx.createLinearGradient(platX, groundY - ph, platX, groundY);
+  grad.addColorStop(0, 'rgba(168,255,62,0.9)');
+  grad.addColorStop(1, 'rgba(80,140,20,0.7)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(platX, groundY - ph, pw, ph);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#a8ff3e'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(platX, groundY - ph, pw, ph);
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------
+   drawHeightIndicator — vertical dashed line from platform
+   down to ground, labelled with h0.
+   Only drawn when h0 > 0 (cliff mode).
+   ------------------------------------------------------------ */
+function drawHeightIndicator(ctx, platX, groundY, platformTopY, h0, scale) {
+  if (h0 <= 0) return;
+
+  var midX = platX + PROJ_LAYOUT.platW * 0.5 + 18;
+
+  /* Dashed vertical line */
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,107,53,0.55)';
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(midX, groundY);
+  ctx.lineTo(midX, platformTopY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* Arrow tips */
+  ctx.fillStyle = 'rgba(255,107,53,0.7)';
+  /* top arrow */
+  ctx.beginPath();
+  ctx.moveTo(midX, platformTopY);
+  ctx.lineTo(midX - 5, platformTopY + 8);
+  ctx.lineTo(midX + 5, platformTopY + 8);
+  ctx.closePath(); ctx.fill();
+  /* bottom arrow */
+  ctx.beginPath();
+  ctx.moveTo(midX, groundY);
+  ctx.lineTo(midX - 5, groundY - 8);
+  ctx.lineTo(midX + 5, groundY - 8);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  /* Height label */
+  drawHeightLabel(ctx, midX + 8, (groundY + platformTopY) / 2, h0);
+}
+
+/* ------------------------------------------------------------
+   drawHeightLabel — text badge showing "h0 = X m"
+   ------------------------------------------------------------ */
+function drawHeightLabel(ctx, x, y, h0) {
+  var txt = 'h0 = ' + fmtSci(h0) + ' m';
+  ctx.save();
+  ctx.font = 'bold 11px Space Mono, monospace';
+  var tw = ctx.measureText(txt).width;
+
+  /* Background pill */
+  ctx.fillStyle = 'rgba(255,107,53,0.18)';
+  ctx.strokeStyle = 'rgba(255,107,53,0.5)';
+  ctx.lineWidth = 1;
+  var pad = 5;
+  ctx.beginPath();
+  ctx.roundRect(x - pad, y - 10, tw + pad * 2, 18, 4);
+  ctx.fill(); ctx.stroke();
+
+  /* Text */
+  ctx.fillStyle = '#ff6b35';
+  ctx.fillText(txt, x, y + 3);
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------
+   drawProjectile — main render function
+   
+   Layout (all fixed pixel values):
+     groundY  = canvas height × groundFrac
+     platX    = margin
+     platTopY = groundY - platH  (same as groundY when h0=0)
+   
+   Physics world → canvas pixel transform:
+     The scale is derived from the trajectory extents.
+     The platform is always at (margin, groundY) in pixels.
+     The ball starts at (platX + platW/2, groundY - platH) visually
+     regardless of h0.
    ------------------------------------------------------------ */
 function drawProjectile() {
   var W = canvas.width, H = canvas.height;
@@ -381,118 +531,172 @@ function drawProjectile() {
   ctx.fillRect(0, 0, W, H);
   drawGrid(ctx, W, H);
 
+  var L = PROJ_LAYOUT;
+
+  /* Fixed visual anchor points */
+  var margin  = L.margin;
+  var groundY = H * L.groundFrac;           /* fixed ground pixel y   */
+  var platX   = margin;                     /* fixed platform left     */
+
+  /* Physics params */
   var v0    = proj._v0;
   var theta = proj._theta * Math.PI / 180;
   var g     = proj._g;
-  var h0    = proj._h0;
+  var h0    = proj._h0 || 0;
 
-  /* --- Scale calculation --- */
-  var sinT = Math.sin(theta), cosT = Math.cos(theta);
-  var vy0  = v0 * sinT, vx0 = v0 * cosT;
-  // Time to apex + time to fall from apex to ground
-  var T_up    = (g > 0) ? vy0 / g : 0;
-  var apexH   = h0 + (g > 0 ? vy0 * vy0 / (2 * g) : 0);
-  var T_down  = (g > 0 && apexH >= 0) ? Math.sqrt(2 * apexH / g) : 0;
-  var T_total = T_up + T_down;
-  var R       = vx0 * T_total;
+  var vx0 = v0 * Math.cos(theta);
+  var vy0 = v0 * Math.sin(theta);
 
-  var margin  = 60;
-  var usableW = W - margin * 2;
-  var usableH = H - margin * 2;
-  var scaleX  = (R    > 0) ? usableW / Math.max(R, 1) : 8;
-  var scaleY  = (apexH > 0) ? usableH / Math.max(apexH, 1) * 0.85 : 8;
-  var scale   = Math.min(scaleX, scaleY);
+  /* Full trajectory extents for scale */
+  var T_flight = solveFlightTime(vy0, g, h0);
+  var apexH    = h0 + (vy0 * vy0) / (2 * g);   /* above ground */
+  var R        = vx0 * T_flight;
 
-  // World → canvas transform
-  function wx(x) { return margin + x * scale; }
-  function wy(y) { return H - margin - y * scale; }
+  /* Scale: fit trajectory into usable canvas area above ground */
+  var usableW  = W - margin * 2;
+  var usableH  = groundY - margin;              /* space above ground */
+  var scaleX   = (R > 0)     ? usableW / Math.max(R, 1) : 8;
+  var scaleY   = (apexH > 0) ? usableH / Math.max(apexH, 1) * 0.88 : 8;
+  var scale    = Math.min(scaleX, scaleY, 80);  /* cap so tiny inputs don't over-scale */
 
-  /* --- Ground line --- */
-  ctx.strokeStyle = 'rgba(0,212,255,0.35)';
-  ctx.lineWidth = 2;
+  /*
+   * World → canvas pixel transforms.
+   *
+   * Origin (x=0, y=0) maps to (platX + platW/2, groundY).
+   * This keeps the launch point always visually on the platform.
+   * h0 is embedded in the physics state, NOT in the visual origin.
+   */
+  var originPx = platX + L.platW / 2;   /* launch point x in pixels */
+
+  function wx(x) { return originPx + x * scale; }
+  function wy(y) { return groundY  - y * scale; } /* y=0 → groundY */
+
+  /* ---- Ground line ---- */
+  ctx.strokeStyle = 'rgba(0,212,255,0.4)';
+  ctx.lineWidth   = 2;
   ctx.beginPath();
-  ctx.moveTo(margin, wy(0));
-  ctx.lineTo(W - margin, wy(0));
+  ctx.moveTo(margin, groundY);
+  ctx.lineTo(W - margin, groundY);
   ctx.stroke();
 
-  /* --- Initial height marker --- */
-  if (h0 > 0) {
-    ctx.strokeStyle = 'rgba(168,255,62,0.3)';
-    ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(margin, wy(h0));
-    ctx.lineTo(margin + 60, wy(h0));
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#a8ff3e'; ctx.font = '11px Space Mono';
-    ctx.fillText('h0=' + h0 + 'm', margin + 5, wy(h0) - 5);
-  }
+  /* ---- Ground fill (subtle) ---- */
+  var gFill = ctx.createLinearGradient(0, groundY, 0, groundY + 20);
+  gFill.addColorStop(0, 'rgba(0,212,255,0.08)');
+  gFill.addColorStop(1, 'rgba(0,212,255,0)');
+  ctx.fillStyle = gFill;
+  ctx.fillRect(margin, groundY, W - margin * 2, 20);
 
-  /* --- Ghost trajectory preview (dashed) --- */
-  ctx.strokeStyle = 'rgba(0,212,255,0.18)';
-  ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);
+  /* ---- Platform (FIXED — never moves) ---- */
+  drawPlatform(ctx, platX, groundY, h0);
+
+  /* ---- Height indicator (cliff mode only) ---- */
+  var platformTopY = groundY - L.platH;
+  drawHeightIndicator(ctx, platX, groundY, platformTopY, h0, scale);
+
+  /* ---- Ghost trajectory preview ---- */
+  ctx.strokeStyle = 'rgba(0,212,255,0.2)';
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([6, 5]);
   ctx.beginPath();
-  var steps = 80;
-  for (var i = 0; i <= steps; i++) {
-    var t  = T_total * i / steps;
+  var GHOST_STEPS = 100;
+  var firstPt = true;
+  for (var i = 0; i <= GHOST_STEPS; i++) {
+    var t  = T_flight * i / GHOST_STEPS;
     var gx = vx0 * t;
     var gy = h0 + vy0 * t - 0.5 * g * t * t;
-    if (gy < 0) break;
-    if (i === 0) ctx.moveTo(wx(gx), wy(gy));
-    else         ctx.lineTo(wx(gx), wy(gy));
+    if (gy < 0) { /* draw to exact ground crossing */
+      /* Interpolate to find exact x at y=0 */
+      var prevT = T_flight * (i - 1) / GHOST_STEPS;
+      var prevY = h0 + vy0 * prevT - 0.5 * g * prevT * prevT;
+      if (prevY > 0) {
+        var frac = prevY / (prevY - gy);
+        var landT = prevT + frac * (T_flight / GHOST_STEPS);
+        ctx.lineTo(wx(vx0 * landT), wy(0));
+      }
+      break;
+    }
+    if (firstPt) { ctx.moveTo(wx(gx), wy(gy)); firstPt = false; }
+    else          { ctx.lineTo(wx(gx), wy(gy)); }
   }
-  ctx.stroke(); ctx.setLineDash([]);
+  ctx.stroke();
+  ctx.setLineDash([]);
 
-  /* --- Trail --- */
+  /* ---- Actual trail ---- */
   if (proj.trail.length > 1) {
     ctx.beginPath();
     for (var ti = 0; ti < proj.trail.length; ti++) {
       var p = proj.trail[ti];
-      var alpha = ti / proj.trail.length;
       if (ti === 0) ctx.moveTo(wx(p.x), wy(p.y));
       else          ctx.lineTo(wx(p.x), wy(p.y));
     }
-    ctx.strokeStyle = 'rgba(0,212,255,0.6)';
-    ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,212,255,0.7)';
+    ctx.lineWidth   = 2;
+    ctx.stroke();
   }
 
-  /* --- Projectile ball --- */
-  var bx = wx(proj.x), by = wy(proj.y);
-  drawGlowCircle(ctx, bx, by, 11, '#00d4ff');
+  /* ---- Projectile ball ---- */
+  /*
+   * Visual position of ball:
+   *   - Before launch: sits on top of the platform surface (platformTopY).
+   *   - During flight: maps physics y to canvas using wy().
+   *   - After landing: snaps to groundY.
+   */
+  var bxPx, byPx;
+  if (!simRunning && simTime === 0) {
+    /* Idle — ball rests on platform */
+    bxPx = originPx;
+    byPx = platformTopY - L.ballR;
+  } else {
+    bxPx = wx(proj.x);
+    byPx = wy(proj.y);
+    /* Clamp ball above ground line — never visually below it */
+    if (byPx > groundY - L.ballR) byPx = groundY - L.ballR;
+  }
+  drawGlowCircle(ctx, bxPx, byPx, L.ballR, '#00d4ff');
 
-  /* --- Velocity vectors --- */
-  if (document.getElementById('proj-vectors') && document.getElementById('proj-vectors').checked) {
-    var vecScale = 3;
-    // Horizontal (vx)
-    if (Math.abs(proj.vx) > 0.1)
-      drawArrow(ctx, bx, by, bx + proj.vx * vecScale, by, '#a8ff3e', 'vx', 2);
-    // Vertical (vy)
-    if (Math.abs(proj.vy) > 0.1)
-      drawArrow(ctx, bx, by, bx, by - proj.vy * vecScale, '#ff6b35', 'vy', 2);
+  /* ---- Velocity vectors ---- */
+  var vecEl = document.getElementById('proj-vectors');
+  if (vecEl && vecEl.checked && simRunning) {
+    var vecScale = Math.max(scale * 0.4, 2);
+    if (Math.abs(proj.vx) > 0.05)
+      drawArrow(ctx, bxPx, byPx, bxPx + proj.vx * vecScale, byPx,              '#a8ff3e', 'vx', 2);
+    if (Math.abs(proj.vy) > 0.05)
+      drawArrow(ctx, bxPx, byPx, bxPx,                      byPx - proj.vy * vecScale, '#ff6b35', 'vy', 2);
   }
 
-  /* --- Apex marker --- */
-  if (T_up > 0 && R > 0) {
-    var apexX = vx0 * T_up;
-    ctx.strokeStyle = 'rgba(168,255,62,0.4)';
-    ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+  /* ---- Apex marker ---- */
+  var T_up  = vy0 / g;
+  var apexX = vx0 * T_up;
+  if (T_up > 0 && apexH > 0.01 && R > 0) {
+    var apexPx = wx(apexX), apexPy = wy(apexH);
+    ctx.strokeStyle = 'rgba(168,255,62,0.35)';
+    ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
     ctx.beginPath();
-    ctx.moveTo(wx(apexX), wy(apexH));
-    ctx.lineTo(wx(apexX), wy(0));
+    ctx.moveTo(apexPx, apexPy);
+    ctx.lineTo(apexPx, groundY);
     ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#a8ff3e'; ctx.font = '11px Space Mono';
+
+    ctx.fillStyle = '#a8ff3e';
+    ctx.font = '11px Space Mono, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('H=' + fmtSci(apexH) + 'm', wx(apexX), wy(apexH) - 10);
+    ctx.fillText('H=' + fmtSci(apexH) + 'm', apexPx, apexPy - 12);
     ctx.textAlign = 'left';
   }
 
-  /* --- Range label --- */
-  if (R > 0) {
-    ctx.fillStyle = 'rgba(0,212,255,0.7)'; ctx.font = '11px Space Mono';
+  /* ---- Range label ---- */
+  if (R > 0.01) {
+    ctx.fillStyle = 'rgba(0,212,255,0.75)';
+    ctx.font = '11px Space Mono, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('R=' + fmtSci(R) + 'm', wx(R / 2), wy(0) + 20);
+    ctx.fillText('R = ' + fmtSci(R) + ' m', wx(R / 2), groundY + 18);
     ctx.textAlign = 'left';
   }
+
+  /* ---- Mode badge (cliff vs ground) ---- */
+  var modeLabel = (h0 > 0) ? 'CLIFF MODE  h0 = ' + fmtSci(h0) + ' m' : 'GROUND LAUNCH';
+  ctx.fillStyle = (h0 > 0) ? 'rgba(255,107,53,0.8)' : 'rgba(107,122,153,0.6)';
+  ctx.font = '10px Space Mono, monospace';
+  ctx.fillText(modeLabel, margin + 4, groundY - L.platH - 18);
 }
 
 /* ------------------------------------------------------------
@@ -505,7 +709,7 @@ function exportProjectileCSV() {
   }
   exportCSV(
     'projectile_data.csv',
-    ['time_s','x_m','y_m','vx_ms','vy_ms','speed_ms','KE_J'],
+    ['time_s', 'x_m', 'y_m', 'vx_ms', 'vy_ms', 'speed_ms', 'KE_J'],
     proj.data
   );
 }
