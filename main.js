@@ -230,12 +230,41 @@ document.addEventListener('keydown', function(e) {
 
 /* ------------------------------------------------------------
    INITIALISE
+
+   Each update/reset function calls its own draw at the end.
+   We suppress those draws during init by temporarily patching
+   simRunning = false + only calling drawCurrentSim once at the
+   very end, after all state is set up.
+
+   The key rule: currentSim = 'projectile' from the start,
+   so only drawProjectile should fire at init time.
    ------------------------------------------------------------ */
 resizeCanvas();
-resetProjectile();
-updateCollision();
-resetPendulum();
-updateWork();
-drawProjectile();
+
+/* Silence all draw calls during reset/update — we'll draw once at the end */
+var _initDone = false;
+var _origDrawProjectile  = null; /* unused — projectile IS the active sim */
+
+/* Block the inactive sims from painting during their reset */
+function _noop() {}
+var _realDrawCollision = drawCollision;
+var _realDrawPendulum  = drawPendulum;
+var _realDrawWork      = drawWork;
+drawCollision = _noop;
+drawPendulum  = _noop;
+drawWork      = _noop;
+
+resetProjectile();   /* active sim — its draw is still live  */
+updateCollision();   /* sets solver state only               */
+resetPendulum();     /* would draw pendulum — suppressed      */
+updateWork();        /* would draw work — suppressed          */
+
+/* Restore real draw functions */
+drawCollision = _realDrawCollision;
+drawPendulum  = _realDrawPendulum;
+drawWork      = _realDrawWork;
+
+/* Single clean draw of the active (projectile) tab */
+drawCurrentSim();
 initTooltips();
 setStatus('stopped');
