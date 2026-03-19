@@ -328,12 +328,61 @@
           <input type="number" id="col-v2" placeholder="e.g. -3" step="any" oninput="updateCollision()">
         </div>
 
+        <div style="font-size:10px;color:var(--accent4);font-family:'Space Mono';letter-spacing:1px;margin:12px 0 8px;text-transform:uppercase">After Collision</div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span>v1 after (v1a)<span class="tip-icon" data-tip="Velocity of object 1 after collision. Enter as known or leave blank." data-tip-title="v1a">?</span></span>
+            <span class="unit">m/s</span>
+          </div>
+          <input type="number" id="col-v1a" placeholder="e.g. −2" step="any" oninput="updateCollision()">
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span>v2 after (v2a)<span class="tip-icon" data-tip="Velocity of object 2 after collision." data-tip-title="v2a">?</span></span>
+            <span class="unit">m/s</span>
+          </div>
+          <input type="number" id="col-v2a" placeholder="e.g. 6" step="any" oninput="updateCollision()">
+        </div>
+
+        <div style="font-size:10px;color:var(--text-dim);font-family:'Space Mono';letter-spacing:1px;margin:12px 0 8px;text-transform:uppercase">Energy &amp; Momentum</div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span>KE before (KEb)<span class="tip-icon" data-tip="Total kinetic energy of both objects before collision." data-tip-title="KEb">?</span></span>
+            <span class="unit">J</span>
+          </div>
+          <input type="number" id="col-KEb" placeholder="e.g. 200" step="any" oninput="updateCollision()">
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span>KE after (KEa)<span class="tip-icon" data-tip="Total KE after. Equal to KEb for elastic." data-tip-title="KEa">?</span></span>
+            <span class="unit">J</span>
+          </div>
+          <input type="number" id="col-KEa" placeholder="e.g. 200" step="any" oninput="updateCollision()">
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span>KE lost (KElost)<span class="tip-icon" data-tip="KElost = KEb − KEa. Zero for elastic." data-tip-title="KElost">?</span></span>
+            <span class="unit">J</span>
+          </div>
+          <input type="number" id="col-KElost" placeholder="e.g. 0" step="any" oninput="updateCollision()">
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span>Total momentum (pt)<span class="tip-icon" data-tip="pt = m1v1 + m2v2. Conserved in all collisions." data-tip-title="pt">?</span></span>
+            <span class="unit">kg·m/s</span>
+          </div>
+          <input type="number" id="col-pt" placeholder="e.g. 31" step="any" oninput="updateCollision()">
+        </div>
+
         <div class="input-group" style="margin-top:10px">
           <div class="input-label">
-            <span>
-              Collision Type
-              <span class="tip-icon" data-tip="Elastic: KE conserved. Perfectly inelastic: objects stick together, max KE lost." data-tip-title="Type">?</span>
-            </span>
+            <span>Collision Type<span class="tip-icon" data-tip="Elastic: KE conserved. Perfectly inelastic: objects stick together." data-tip-title="Type">?</span></span>
           </div>
           <select id="col-type" onchange="updateCollision()">
             <option value="elastic">Elastic (KE conserved)</option>
