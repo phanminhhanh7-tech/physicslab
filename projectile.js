@@ -306,7 +306,7 @@ function stepProjectile(dt) {
   var m     = proj._m;
   var h0    = proj._h0;
 
-  /* Initialise on first frame */
+  /* Initialise on first frame (simTime very small) */
   if (simTime <= dt + 0.001) {
     proj.x     = 0;
     proj.y     = h0;
@@ -314,15 +314,35 @@ function stepProjectile(dt) {
     proj.vy    = v0 * Math.sin(theta);
     proj.trail = [];
     proj.data  = [];
+    proj.done  = false;
   }
 
-  /* Euler integration */
-  proj.vy -= g * dt;
-  proj.x  += proj.vx * dt;
-  proj.y  += proj.vy * dt;
+  /* ----------------------------------------------------------
+     Sub-stepped Euler integration.
+     Breaking dt into smaller chunks keeps the trajectory
+     accurate and prevents the ball from "tunnelling" through
+     the ground on slow frames.
+     ---------------------------------------------------------- */
+  var SUBSTEPS = 4;
+  var dts = dt / SUBSTEPS;
 
-  /* Trail */
-  if (document.getElementById('proj-trail') && document.getElementById('proj-trail').checked) {
+  for (var si = 0; si < SUBSTEPS; si++) {
+    /* Apply gravity to vertical velocity, then move */
+    proj.vy -= g * dts;
+    proj.x  += proj.vx * dts;
+    proj.y  += proj.vy * dts;
+
+    /* Ground clamp — stop exactly at y = 0, never below */
+    if (proj.y <= 0 && simTime > 0.05) {
+      proj.y    = 0;
+      proj.done = true;
+      break;          /* stop sub-steps once landed */
+    }
+  }
+
+  /* Trail — only when checkbox is ticked */
+  var trailEl = document.getElementById('proj-trail');
+  if (trailEl && trailEl.checked) {
     proj.trail.push({ x: proj.x, y: proj.y });
     if (proj.trail.length > 600) proj.trail.shift();
   }
@@ -338,11 +358,6 @@ function stepProjectile(dt) {
     parseFloat(speed.toFixed(3)),
     parseFloat((0.5 * m * speed * speed).toFixed(3))
   ]);
-
-  /* Land detection */
-  if (proj.y <= 0 && proj.vy < 0 && simTime > 0.05) {
-    proj.y = 0; proj.done = true;
-  }
 
   /* Update live result cards */
   var ke = 0.5 * m * speed * speed;
