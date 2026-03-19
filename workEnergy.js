@@ -460,41 +460,75 @@ function _wrkBar(barId, lblId, val, maxE) {
 
 /* ------------------------------------------------------------
    STEP
+   
+   Position is stored as a fraction of the track (0.0 = left,
+   1.0 = right end at 85%).  Velocity is in physical m/s, converted
+   to track-fraction/s for position updates using the distance d.
    ------------------------------------------------------------ */
 function stepWork(dt) {
-  var c    = wrk._computed || {};
-  var m    = c.m || 10, F = c.F || 0;
-  var th   = (c.theta || 0) * Math.PI / 180;
-  var d    = c.d || 20, vi = c.vi || 0;
-  var mu   = c.mu || 0, g  = c.g || 9.81;
+  var c  = wrk._computed || {};
+  var m  = c.m  || 10;
+  var F  = c.F  || 0;
+  var th = (c.theta || 0) * Math.PI / 180;
+  var d  = c.d  || 20;   /* track length in metres */
+  var vi = c.vi || 0;
+  var mu = c.mu || 0;
+  var g  = c.g  || 9.81;
 
+  /* Initialise on first frame */
   if (simTime <= dt + 0.001) {
-    wrk.x = 0; wrk.v = vi * 0.04;
-    wrk.done = false; wrk.ke_history = []; wrk.data = [];
+    wrk.v      = vi;           /* physical velocity in m/s   */
+    wrk.x      = 0;            /* position in metres         */
+    wrk.done   = false;
+    wrk.ke_history = [];
+    wrk.data   = [];
   }
+
   if (wrk.done) { stopSim(); return; }
 
+  /* Net force and acceleration — physics equations unchanged */
   var Fnet = F * Math.cos(th) - mu * m * g;
   var a    = (m > 0) ? Fnet / m : 0;
 
-  wrk.v += a * dt * 0.04;
-  wrk.x += wrk.v * dt;
+  /* Sub-stepped Euler for smoother motion */
+  var SUBSTEPS = 4;
+  var dts = dt / SUBSTEPS;
+  for (var si = 0; si < SUBSTEPS; si++) {
+    wrk.v += a * dts;
+    wrk.x += wrk.v * dts;
 
-  var v_actual = wrk.v / 0.04;
-  var ke       = 0.5 * m * v_actual * v_actual;
+    /* Wall clamps: snap to boundary and zero velocity */
+    if (wrk.x <= 0 && wrk.v < 0) {
+      wrk.x = 0;
+      wrk.v = 0;
+      wrk.done = true;
+      break;
+    }
+    if (wrk.x >= d * 0.85 && wrk.v > 0) {
+      wrk.x = d * 0.85;
+      wrk.v = 0;
+      wrk.done = true;
+      break;
+    }
+  }
+
+  /* Kill micro-crawl */
+  if (Math.abs(wrk.v) < 0.001) wrk.v = 0;
+
+  /* KE history for the graph */
+  var ke = 0.5 * m * wrk.v * wrk.v;
   wrk.ke_history.push(ke);
   if (wrk.ke_history.length > 200) wrk.ke_history.shift();
 
-  /* Record data */
-  wrk.data.push([parseFloat(simTime.toFixed(3)),
-    parseFloat((wrk.x * d).toFixed(3)),
-    parseFloat(v_actual.toFixed(3)),
-    parseFloat(ke.toFixed(3))]);
+  /* Record data for CSV — x in metres, v in m/s */
+  wrk.data.push([
+    parseFloat(simTime.toFixed(3)),
+    parseFloat(wrk.x.toFixed(3)),
+    parseFloat(wrk.v.toFixed(3)),
+    parseFloat(ke.toFixed(3))
+  ]);
 
-  if (wrk.x >= 0.85)           { wrk.x = 0.85; wrk.done = true; }
-  if (wrk.x < 0 && wrk.v < 0) { wrk.x = 0;    wrk.done = true; }
-
-  updateInfoBar(simTime, wrk.x * d, 0, Math.abs(v_actual));
+  updateInfoBar(simTime, wrk.x, 0, Math.abs(wrk.v));
 }
 
 /* ------------------------------------------------------------
@@ -541,8 +575,9 @@ function drawWork() {
   }
   ctx.textAlign = 'left';
 
-  /* Block */
-  var bx = margin + wrk.x * trackW;
+  /* Block — x is in metres, convert to canvas pixels */
+  var trackFrac = (d > 0) ? Math.min(wrk.x / d, 1) : 0;
+  var bx = margin + trackFrac * trackW;
   var bw = 58, bh = 44;
   var by = surfY - bh;
 
@@ -587,10 +622,9 @@ function drawWork() {
     ctx.fillText('h=' + h + 'm', bx + bw / 2 + 22, surfY - hPx / 2);
   }
 
-  /* Velocity readout */
-  var v_actual = wrk.v / 0.04;
+  /* Velocity readout — wrk.v is now in physical m/s */
   ctx.fillStyle = '#a8ff3e'; ctx.font = 'bold 13px Space Mono, monospace';
-  ctx.fillText('v = ' + fmt(Math.abs(v_actual), 2) + ' m/s', margin + trackW - 155, surfY - bh - 14);
+  ctx.fillText('v = ' + fmt(Math.abs(wrk.v), 2) + ' m/s', margin + trackW - 155, surfY - bh - 14);
 
   /* KE history graph */
   if (wrk.ke_history.length > 2) {
