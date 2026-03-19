@@ -887,53 +887,198 @@ function updateCollision() {
 }
 
 /* ============================================================
+   PHYSICS ENGINE — updateObject + handleWallCollision
+   
+   Design:
+   - Positions are stored in PIXEL space (px) not normalised 0-1,
+     so radius comparisons are exact with no unit conversion bugs.
+   - Each frame: move → wall resolve → object-object resolve → record
+   - Wall resolution clamps position AND checks velocity direction
+     before reversing (prevents double-reverse jitter).
+   - Object-object collision uses a single-collision flag per
+     approach, reset when objects separate, so re-collisions work.
+   ============================================================ */
+
+var WALL_RESTITUTION = 0.82; /* energy kept on wall bounce (0–1) */
+var VEL_THRESHOLD    = 0.02; /* m/s — zero out crawling velocity  */
+
+/**
+ * updateObject — move a single ball by dt seconds.
+ * Position is in pixels; velocity in pixels/second.
+ * @param {{ x:number, vPx:number }} obj
+ * @param {number} dt  delta-time in seconds
+ */
+function updateObject(obj, dt) {
+  obj.x += obj.vPx * dt;
+}
+
+/**
+ * handleWallCollision — resolve a ball against left/right walls.
+ * 
+ * Algorithm:
+ *   1. Check if ball edge crossed the wall.
+ *   2. If so, CLAMP position back to the wall surface (no clipping).
+ *   3. Reverse velocity, apply restitution.
+ *   4. Only reverse if ball is still moving INTO the wall (prevents
+ *      double-reverse when a ball is nudged out by position correction).
+ *   5. Kill crawl: if |v| < threshold after bounce, set v = 0.
+ *
+ * @param {{ x:number, vPx:number }} obj
+ * @param {number} r    ball radius in pixels
+ * @param {number} Wmin left boundary in pixels  (usually margin)
+ * @param {number} Wmax right boundary in pixels (usually margin + trackW)
+ */
+function handleWallCollision(obj, r, Wmin, Wmax) {
+  /* ---- Left wall ---- */
+  if (obj.x - r < Wmin) {
+    obj.x = Wmin + r;                /* clamp: push back inside     */
+    if (obj.vPx < 0) {               /* only reverse if moving left */
+      obj.vPx = -obj.vPx * WALL_RESTITUTION;
+      if (Math.abs(obj.vPx) < VEL_THRESHOLD * 50) obj.vPx = 0; /* kill crawl */
+    }
+  }
+
+  /* ---- Right wall ---- */
+  if (obj.x + r > Wmax) {
+    obj.x = Wmax - r;                /* clamp: push back inside     */
+    if (obj.vPx > 0) {               /* only reverse if moving right*/
+      obj.vPx = -obj.vPx * WALL_RESTITUTION;
+      if (Math.abs(obj.vPx) < VEL_THRESHOLD * 50) obj.vPx = 0;
+    }
+  }
+}
+
+/* ============================================================
    ANIMATION STEP
    ============================================================ */
 function stepCollision(dt) {
-  var m1 = col._m1, m2 = col._m2;
-  var v1i = col._v1i, v2i = col._v2i;
+  var m1   = col._m1 || 5,  m2   = col._m2 || 3;
+  var v1i  = col._v1i || 8, v2i  = col._v2i || -3;
   var type = col._type || 'elastic';
 
+  /* Canvas geometry — computed each frame so resize is handled */
+  var margin = 60;
+  var trackW = canvas.width - margin * 2;
+  var Wmin   = margin;
+  var Wmax   = margin + trackW;
+
+  /* Pixel radii — must match what drawCollision draws */
+  var r1px = Math.min(Math.max(Math.sqrt(m1) * 14, 12), 45);
+  var r2px = Math.min(Math.max(Math.sqrt(m2) * 14, 12), 45);
+
+  /* ---- Initialise on first frame ---- */
   if (simTime <= dt + 0.001) {
-    col.b1 = { x: 0.12, v: v1i * 0.05 };
-    col.b2 = { x: 0.78, v: v2i * 0.05 };
-    col.collided = false; col.phase = 'pre'; col.data = [];
+    /* Convert physical velocities to pixel/s using a consistent scale:
+       1 m/s in physics = 40 px/s on screen (same as old 0.05 factor: px_norm/s * trackW ≈ 40px/s) */
+    var PX_PER_MS = 40;
+    col.b1 = {
+      x:    Wmin + 0.12 * trackW,   /* start at 12% of track */
+      vPx:  v1i * PX_PER_MS
+    };
+    col.b2 = {
+      x:    Wmin + 0.78 * trackW,   /* start at 78% of track */
+      vPx:  v2i * PX_PER_MS
+    };
+    col.collided    = false;
+    col.separating  = false;        /* tracks whether balls are moving apart */
+    col.phase       = 'pre';
+    col.data        = [];
   }
 
-  var r = 0.07;
-  if (!col.collided) {
-    col.b1.x += col.b1.v * dt;
-    col.b2.x += col.b2.v * dt;
-    if (Math.abs(col.b1.x - col.b2.x) <= r * 2) {
-      col.collided = true; col.phase = 'post';
-      var v1 = col.b1.v / 0.05, v2 = col.b2.v / 0.05;
-      var mt = m1 + m2, v1f, v2f;
+  /* ---- Step 1: Move both objects ---- */
+  updateObject(col.b1, dt);
+  updateObject(col.b2, dt);
+
+  /* ---- Step 2: Resolve wall collisions ---- */
+  handleWallCollision(col.b1, r1px, Wmin, Wmax);
+  handleWallCollision(col.b2, r2px, Wmin, Wmax);
+
+  /* ---- Step 3: Object-object collision ----
+     
+     Use surface-to-surface distance = |b2.x - b1.x| - (r1 + r2).
+     Negative → overlapping.
+     
+     We allow RE-COLLISION: once balls separate (gap > 0) the flag resets,
+     so if a ball bounces back from a wall and hits again, it collides again.
+  */
+  var gap = (col.b2.x - col.b1.x) - (r1px + r2px);
+
+  /* Reset collision flag when balls have cleanly separated */
+  if (gap > 2) {
+    col.collided = false;
+  }
+
+  if (!col.collided && gap <= 0) {
+    /* Check that balls are actually approaching (relative velocity negative) */
+    var relVel = col.b1.vPx - col.b2.vPx; /* positive = b1 chasing b2 */
+
+    if (relVel > 0) {
+      col.collided = true;
+      col.phase    = 'post';
+
+      /* Convert px/s → m/s for physics calculation */
+      var PX_PER_MS = 40;
+      var v1 = col.b1.vPx / PX_PER_MS;
+      var v2 = col.b2.vPx / PX_PER_MS;
+      var mt = m1 + m2;
+      var v1f, v2f;
+
       if (type === 'elastic') {
-        v1f = ((m1-m2)*v1 + 2*m2*v2)/mt;
-        v2f = (2*m1*v1 + (m2-m1)*v2)/mt;
+        v1f = ((m1 - m2) * v1 + 2 * m2 * v2) / mt;
+        v2f = (2 * m1 * v1 + (m2 - m1) * v2) / mt;
       } else if (type === 'perfect') {
-        v1f = v2f = (m1*v1 + m2*v2)/mt;
+        v1f = v2f = (m1 * v1 + m2 * v2) / mt;
       } else {
-        var e = getNullable('col-e') || 0.5;
-        var rel = e*(v1-v2);
-        v1f = (m1*v1 + m2*v2 - m2*rel)/mt;
+        /* Inelastic: use user-supplied e, default 0.5 */
+        var e   = getNullable('col-e');
+        if (e === null || e < 0 || e > 1) e = 0.5;
+        var rel = e * (v1 - v2);
+        v1f = (m1 * v1 + m2 * v2 - m2 * rel) / mt;
         v2f = v1f + rel;
       }
-      col.b1.v = v1f * 0.05;
-      col.b2.v = v2f * 0.05;
-    }
-  } else {
-    col.b1.x += col.b1.v * dt;
-    col.b2.x += col.b2.v * dt;
-  }
-  if (col.b1.x < r)     { col.b1.x = r;     col.b1.v *= -0.85; }
-  if (col.b2.x > 1 - r) { col.b2.x = 1-r;   col.b2.v *= -0.85; }
 
-  var v1n = col.b1.v/0.05, v2n = col.b2.v/0.05;
-  var KE  = 0.5*m1*v1n*v1n + 0.5*m2*v2n*v2n;
-  col.data.push([+simTime.toFixed(3), +col.b1.x.toFixed(4), +v1n.toFixed(3),
-                 +col.b2.x.toFixed(4), +v2n.toFixed(3), +KE.toFixed(3)]);
-  updateInfoBar(simTime, col.b1.x, 0, Math.abs(v1n));
+      /* Apply new velocities */
+      col.b1.vPx = v1f * PX_PER_MS;
+      col.b2.vPx = v2f * PX_PER_MS;
+
+      /* ---- Position correction: push balls apart so they don't overlap ----
+         Split the overlap proportionally by mass (heavier ball moves less) */
+      var overlap = -gap; /* positive amount of overlap */
+      var push1   = overlap * (m2 / mt); /* b1 pushed left  */
+      var push2   = overlap * (m1 / mt); /* b2 pushed right */
+      col.b1.x   -= push1;
+      col.b2.x   += push2;
+
+      /* Re-run wall clamp after position correction */
+      handleWallCollision(col.b1, r1px, Wmin, Wmax);
+      handleWallCollision(col.b2, r2px, Wmin, Wmax);
+    }
+  }
+
+  /* ---- Step 4: Kill crawl — stop near-zero velocities ----
+     Threshold in px/s = VEL_THRESHOLD m/s * 40 px/m/s */
+  var vThreshPx = VEL_THRESHOLD * 40;
+  if (Math.abs(col.b1.vPx) < vThreshPx) col.b1.vPx = 0;
+  if (Math.abs(col.b2.vPx) < vThreshPx) col.b2.vPx = 0;
+
+  /* ---- Step 5: Record CSV data ---- */
+  var PX_PER_MS = 40;
+  var v1n = col.b1.vPx / PX_PER_MS;
+  var v2n = col.b2.vPx / PX_PER_MS;
+  var KE  = 0.5 * m1 * v1n * v1n + 0.5 * m2 * v2n * v2n;
+
+  /* Convert pixel position back to normalised 0-1 for CSV */
+  var x1norm = (col.b1.x - Wmin) / trackW;
+  var x2norm = (col.b2.x - Wmin) / trackW;
+
+  col.data.push([
+    +simTime.toFixed(3),
+    +x1norm.toFixed(4), +v1n.toFixed(3),
+    +x2norm.toFixed(4), +v2n.toFixed(3),
+    +KE.toFixed(3)
+  ]);
+
+  updateInfoBar(simTime, x1norm, 0, Math.abs(v1n));
 }
 
 /* ============================================================
@@ -941,77 +1086,118 @@ function stepCollision(dt) {
    ============================================================ */
 function drawCollision() {
   var W = canvas.width, H = canvas.height;
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = '#080b12'; ctx.fillRect(0,0,W,H);
-  drawGrid(ctx,W,H);
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#080b12'; ctx.fillRect(0, 0, W, H);
+  drawGrid(ctx, W, H);
 
-  var m1 = col._m1||5, m2 = col._m2||3;
-  var v1i = col._v1i||8, v2i = col._v2i||-3;
-  var type = col._type||'elastic';
-  var surfY = H*0.60, margin = 60, trackW = W-margin*2;
+  var m1   = col._m1  || 5,  m2   = col._m2  || 3;
+  var v1i  = col._v1i || 8,  v2i  = col._v2i || -3;
+  var type = col._type || 'elastic';
 
+  var surfY  = H * 0.60;
+  var margin = 60;
+  var trackW = W - margin * 2;
+  var Wmin   = margin;
+  var Wmax   = margin + trackW;
+
+  /* ---- Track surface ---- */
   ctx.strokeStyle = 'rgba(0,212,255,0.4)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(margin,surfY); ctx.lineTo(W-margin,surfY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(Wmin, surfY); ctx.lineTo(Wmax, surfY); ctx.stroke();
 
-  var r1 = Math.min(Math.max(Math.sqrt(m1)*14,12),45);
-  var r2 = Math.min(Math.max(Math.sqrt(m2)*14,12),45);
-  var b1x = margin+col.b1.x*trackW;
-  var b2x = margin+col.b2.x*trackW;
+  /* ---- Wall markers ---- */
+  ctx.strokeStyle = 'rgba(0,212,255,0.2)'; ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(Wmin, surfY - 60); ctx.lineTo(Wmin, surfY + 10); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(Wmax, surfY - 60); ctx.lineTo(Wmax, surfY + 10); ctx.stroke();
+  ctx.setLineDash([]);
 
-  function drawBall(cx,cy,r,color,label) {
+  /* Pixel radii */
+  var r1px = Math.min(Math.max(Math.sqrt(m1) * 14, 12), 45);
+  var r2px = Math.min(Math.max(Math.sqrt(m2) * 14, 12), 45);
+
+  /* Ball positions come directly from pixel state */
+  var b1x = col.b1.x;
+  var b2x = col.b2.x;
+
+  /* ---- Draw balls ---- */
+  function drawBall(cx, cy, r, color, label) {
     ctx.save();
     ctx.shadowColor = color; ctx.shadowBlur = 22;
-    var g = ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,0,cx,cy,r);
-    g.addColorStop(0,color+'ee'); g.addColorStop(1,color+'44');
+    var g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r);
+    g.addColorStop(0, color + 'ee'); g.addColorStop(1, color + '44');
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#000'; ctx.font = 'bold 10px DM Sans';
-    ctx.textAlign = 'center'; ctx.fillText(label,cx,cy+4);
+    ctx.textAlign = 'center'; ctx.fillText(label, cx, cy + 4);
     ctx.restore();
   }
 
-  drawBall(b1x, surfY-r1, r1, '#00d4ff', m1+'kg');
-  drawBall(b2x, surfY-r2, r2, '#ff6b35', m2+'kg');
+  drawBall(b1x, surfY - r1px, r1px, '#00d4ff', m1 + 'kg');
+  drawBall(b2x, surfY - r2px, r2px, '#ff6b35', m2 + 'kg');
 
-  var v1n = col.b1.v/0.05, v2n = col.b2.v/0.05, sc = 4;
-  if (Math.abs(v1n)>0.05)
-    drawArrow(ctx,b1x,surfY-r1,b1x+v1n*sc,surfY-r1,'#00d4ff',fmtSci(v1n)+' m/s',2);
-  if (Math.abs(v2n)>0.05)
-    drawArrow(ctx,b2x,surfY-r2,b2x+v2n*sc,surfY-r2,'#ff6b35',fmtSci(v2n)+' m/s',2);
+  /* ---- Velocity arrows ---- */
+  var PX_PER_MS = 40;
+  var v1n = col.b1.vPx / PX_PER_MS;
+  var v2n = col.b2.vPx / PX_PER_MS;
+  var sc  = 4; /* pixels per m/s for arrow length */
 
-  /* Momentum arrows */
-  var p1 = m1*v1n, p2 = m2*v2n;
-  if (Math.abs(p1)>0.1)
-    drawArrow(ctx,b1x,surfY+16,b1x+p1*0.5,surfY+16,'rgba(0,212,255,0.4)','p1',1.5);
-  if (Math.abs(p2)>0.1)
-    drawArrow(ctx,b2x,surfY+16,b2x+p2*0.5,surfY+16,'rgba(255,107,53,0.4)','p2',1.5);
+  if (Math.abs(v1n) > 0.05)
+    drawArrow(ctx, b1x, surfY - r1px, b1x + v1n * sc, surfY - r1px,
+              '#00d4ff', fmtSci(v1n) + ' m/s', 2);
+  if (Math.abs(v2n) > 0.05)
+    drawArrow(ctx, b2x, surfY - r2px, b2x + v2n * sc, surfY - r2px,
+              '#ff6b35', fmtSci(v2n) + ' m/s', 2);
 
-  var tLabel = type==='perfect'?'PERFECTLY INELASTIC':type==='elastic'?'ELASTIC':'INELASTIC';
-  ctx.fillStyle = col.phase==='post'?'#a8ff3e':'#6b7a99';
-  ctx.font = 'bold 11px Space Mono'; ctx.textAlign = 'left';
-  ctx.fillText(tLabel+' — '+col.phase.toUpperCase(), margin, surfY+36);
+  /* ---- Momentum arrows (below track) ---- */
+  var p1 = m1 * v1n, p2 = m2 * v2n;
+  if (Math.abs(p1) > 0.1)
+    drawArrow(ctx, b1x, surfY + 18, b1x + p1 * 0.5, surfY + 18,
+              'rgba(0,212,255,0.4)', 'p1', 1.5);
+  if (Math.abs(p2) > 0.1)
+    drawArrow(ctx, b2x, surfY + 18, b2x + p2 * 0.5, surfY + 18,
+              'rgba(255,107,53,0.4)', 'p2', 1.5);
 
-  /* KE bars */
-  var KEnow  = 0.5*m1*v1n*v1n + 0.5*m2*v2n*v2n;
-  var KEinit = 0.5*m1*v1i*v1i + 0.5*m2*v2i*v2i;
-  var barY = H*0.77, bh = 13, maxW = trackW/2-24;
-  var KEmax = Math.max(KEnow,KEinit,1);
-  ctx.fillStyle = 'rgba(10,13,20,0.75)'; ctx.fillRect(margin,barY-18,trackW,bh+26);
+  /* ---- Type + phase label ---- */
+  var tLabel = type === 'perfect' ? 'PERFECTLY INELASTIC'
+             : type === 'elastic' ? 'ELASTIC' : 'INELASTIC';
+  ctx.fillStyle  = col.phase === 'post' ? '#a8ff3e' : '#6b7a99';
+  ctx.font       = 'bold 11px Space Mono';
+  ctx.textAlign  = 'left';
+  ctx.fillText(tLabel + ' — ' + col.phase.toUpperCase(), Wmin, surfY + 40);
+
+  /* ---- KE comparison bars ---- */
+  var KEnow  = 0.5 * m1 * v1n * v1n + 0.5 * m2 * v2n * v2n;
+  var KEinit = 0.5 * m1 * v1i * v1i + 0.5 * m2 * v2i * v2i;
+  var barY   = H * 0.78;
+  var bh     = 13;
+  var maxW   = trackW / 2 - 24;
+  var KEmax  = Math.max(KEnow, KEinit, 1);
+
+  ctx.fillStyle = 'rgba(10,13,20,0.75)';
+  ctx.fillRect(Wmin, barY - 18, trackW, bh + 26);
   ctx.fillStyle = 'rgba(107,122,153,0.5)'; ctx.font = '10px Space Mono';
-  ctx.fillText('KEi: '+fmtSci(KEinit)+' J', margin+4, barY-4);
-  ctx.fillText('KE now: '+fmtSci(KEnow)+' J', margin+maxW+28, barY-4);
-  ctx.fillStyle = 'rgba(30,42,66,0.6)'; ctx.fillRect(margin,barY,maxW,bh);
+  ctx.fillText('KEi: '   + fmtSci(KEinit) + ' J', Wmin + 4, barY - 4);
+  ctx.fillText('KE now: ' + fmtSci(KEnow)  + ' J', Wmin + maxW + 28, barY - 4);
+
+  /* Initial KE bar */
+  ctx.fillStyle = 'rgba(30,42,66,0.6)';
+  ctx.fillRect(Wmin, barY, maxW, bh);
   ctx.fillStyle = 'rgba(0,212,255,0.5)';
-  ctx.fillRect(margin,barY,Math.min(KEinit/KEmax*maxW,maxW),bh);
-  ctx.fillStyle = 'rgba(30,42,66,0.6)'; ctx.fillRect(margin+maxW+24,barY,maxW,bh);
-  ctx.fillStyle = col.phase==='post'?'rgba(168,255,62,0.5)':'rgba(0,212,255,0.5)';
-  ctx.fillRect(margin+maxW+24,barY,Math.min(KEnow/KEmax*maxW,maxW),bh);
-  if (type==='inelastic') {
+  ctx.fillRect(Wmin, barY, Math.min(KEinit / KEmax * maxW, maxW), bh);
+
+  /* Current KE bar */
+  ctx.fillStyle = 'rgba(30,42,66,0.6)';
+  ctx.fillRect(Wmin + maxW + 24, barY, maxW, bh);
+  ctx.fillStyle = col.phase === 'post' ? 'rgba(168,255,62,0.5)' : 'rgba(0,212,255,0.5)';
+  ctx.fillRect(Wmin + maxW + 24, barY, Math.min(KEnow / KEmax * maxW, maxW), bh);
+
+  /* e label for inelastic */
+  if (type === 'inelastic') {
     var eV = getNullable('col-e');
     ctx.fillStyle = '#a8ff3e'; ctx.font = '11px Space Mono';
-    ctx.fillText('e = '+(eV!==null?eV:'?'), margin+trackW-80, barY-4);
+    ctx.fillText('e = ' + (eV !== null ? eV : '?'), Wmin + trackW - 80, barY - 4);
   }
 }
 
@@ -1019,9 +1205,9 @@ function drawCollision() {
    CSV EXPORT
    ============================================================ */
 function exportCollisionCSV() {
-  if (!col.data || col.data.length===0) {
+  if (!col.data || col.data.length === 0) {
     alert('Run the simulation first to generate data.'); return;
   }
   exportCSV('collision_data.csv',
-    ['time_s','x1_norm','v1_ms','x2_norm','v2_ms','KE_J'], col.data);
+    ['time_s', 'x1_norm', 'v1_ms', 'x2_norm', 'v2_ms', 'KE_J'], col.data);
 }
