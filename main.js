@@ -2,6 +2,12 @@
    main.js — PhysicsLab Core Engine
    Handles: canvas setup, animation loop, tab switching,
    simulation control (play/pause/step/reset), keyboard shortcuts
+
+   ANIMATION DESIGN:
+   - requestAnimationFrame loop with real DOMHighResTimeStamp dt
+   - dt clamped between MIN_DT (0.5ms) and MAX_DT (33ms)
+   - First-frame skip prevents a zero-dt initialisation glitch
+   - lastTime reset on every stop/pause so resuming is clean
    ============================================================ */
 
 'use strict';
@@ -12,61 +18,67 @@
 var canvas = document.getElementById('simCanvas');
 var ctx    = canvas.getContext('2d');
 
-/** Resize canvas to fill its container (called on load + resize). */
 function resizeCanvas() {
   var container = canvas.parentElement;
   canvas.width  = container.clientWidth;
   canvas.height = container.clientHeight;
 }
-window.addEventListener('resize', function() {
-  resizeCanvas();
-  drawCurrentSim();
-});
+window.addEventListener('resize', function() { resizeCanvas(); drawCurrentSim(); });
 
 /* ------------------------------------------------------------
    GLOBAL SIMULATION STATE
    ------------------------------------------------------------ */
-var currentSim  = 'projectile'; // which simulation is active
-var animFrame   = null;         // requestAnimationFrame handle
-var simRunning  = false;        // is the simulation running?
-var simTime     = 0;            // elapsed simulation time (s)
-var lastTime    = null;         // previous RAF timestamp (ms)
+var currentSim = 'projectile';
+var animFrame  = null;
+var simRunning = false;
+var simTime    = 0;
+var lastTime   = null;
 
-/* Step-through mode: when stepping frame-by-frame */
-var STEP_DT = 1 / 60;          // fixed delta-time for manual steps (s)
+/* Fixed dt for manual step-through (1 frame @ 60 fps) */
+var STEP_DT = 1 / 60;
+
+/* Animation dt limits:
+   MAX_DT: if a frame takes > 33 ms (tab hidden, slow device)
+           skip rather than send a huge dt that tunnels objects.
+   MIN_DT: skip the very first RAF tick where lastTime === ts. */
+var MAX_DT = 0.033;
+var MIN_DT = 0.0005;
 
 /* ------------------------------------------------------------
-   SIMULATION LOOP
+   ANIMATION LOOP
    ------------------------------------------------------------ */
 
 /**
- * Main animation loop — called every frame by requestAnimationFrame.
- * @param {number} ts - timestamp in milliseconds
+ * RAF callback.
+ * Order per frame:  compute dt → step physics → render → queue next.
  */
 function simLoop(ts) {
   if (!simRunning) return;
 
-  // Compute delta-time, capped at 50 ms to prevent spiral-of-death
-  // when tab is hidden or frame rate drops.
-  if (!lastTime) lastTime = ts;
-  var dt = Math.min((ts - lastTime) / 1000, 0.05);
+  /* First frame after start: record time and skip stepping. */
+  if (lastTime === null) {
+    lastTime = ts;
+    animFrame = requestAnimationFrame(simLoop);
+    return;
+  }
+
+  var dt = (ts - lastTime) / 1000;
   lastTime = ts;
+
+  /* Reject frames that are too tiny or suspiciously large. */
+  if (dt < MIN_DT || dt > MAX_DT) {
+    animFrame = requestAnimationFrame(simLoop);
+    return;
+  }
+
   simTime += dt;
 
-  // Step the active simulation
-  stepCurrentSim(dt);
+  stepCurrentSim(dt);   /* physics update   */
+  drawCurrentSim();     /* render           */
 
-  // Render
-  drawCurrentSim();
-
-  // Schedule next frame
   animFrame = requestAnimationFrame(simLoop);
 }
 
-/**
- * Dispatch a physics step to the active simulation module.
- * @param {number} dt - delta time in seconds
- */
 function stepCurrentSim(dt) {
   if (currentSim === 'projectile') stepProjectile(dt);
   if (currentSim === 'collision')  stepCollision(dt);
@@ -74,7 +86,6 @@ function stepCurrentSim(dt) {
   if (currentSim === 'work')       stepWork(dt);
 }
 
-/** Dispatch draw to the active simulation module. */
 function drawCurrentSim() {
   if (currentSim === 'projectile') drawProjectile();
   if (currentSim === 'collision')  drawCollision();
@@ -86,69 +97,57 @@ function drawCurrentSim() {
    PLAYBACK CONTROLS
    ------------------------------------------------------------ */
 
-/** Start or resume the simulation. */
 function startSim() {
   simRunning = true;
-  lastTime   = null;
+  lastTime   = null;      /* skip first frame cleanly */
   setStatus('running');
   if (animFrame) cancelAnimationFrame(animFrame);
   animFrame = requestAnimationFrame(simLoop);
 }
 
-/** Pause without resetting. */
 function pauseSim() {
   simRunning = false;
+  lastTime   = null;      /* avoid stale timestamp on resume */
   setStatus('paused');
 }
 
-/** Stop and reset time. */
 function stopSim() {
   simRunning = false;
+  lastTime   = null;
   setStatus('stopped');
   if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
 }
 
-/**
- * Full reset: stop simulation, reset time, call the active
- * sim's reset function, redraw.
- */
 function resetSim() {
   stopSim();
   simTime  = 0;
   lastTime = null;
-
   if (currentSim === 'projectile') resetProjectile();
   if (currentSim === 'collision')  resetCollision();
   if (currentSim === 'pendulum')   resetPendulum();
   if (currentSim === 'work')       resetWork();
-
   updateInfoBar(0, 0, 0, 0);
   drawCurrentSim();
 }
 
 /**
- * Advance the simulation by exactly one fixed frame (STEP_DT).
- * This allows frame-by-frame inspection of the physics.
- * The simulation must be paused first.
+ * Step one fixed frame forward — useful for frame-by-frame inspection.
+ * Pauses running sim if called while running.
  */
 function stepFrame() {
   if (simRunning) { pauseSim(); return; }
-
-  // If we're fully stopped, restart state first
   if (simTime === 0) {
     if (currentSim === 'projectile') resetProjectile();
     if (currentSim === 'collision')  resetCollision();
     if (currentSim === 'pendulum')   resetPendulum();
     if (currentSim === 'work')       resetWork();
   }
-
   simTime += STEP_DT;
   stepCurrentSim(STEP_DT);
   drawCurrentSim();
   setStatus('paused');
 }
 
-/** Toggle play/pause — called by the main button. */
 function handleMainBtn() {
   if (simRunning) pauseSim();
   else            startSim();
@@ -157,16 +156,11 @@ function handleMainBtn() {
 /* ------------------------------------------------------------
    STATUS BADGE
    ------------------------------------------------------------ */
-
-/**
- * Update the status badge and main button label.
- * @param {'running'|'paused'|'stopped'} state
- */
 function setStatus(state) {
   var badge = document.getElementById('statusBadge');
+  if (!badge) return;
   badge.className = 'status-badge ' + state;
   badge.innerHTML = '<span class="status-dot"></span> ' + state.toUpperCase();
-
   var btn = document.getElementById('mainBtn');
   if (!btn) return;
   if (state === 'running') {
@@ -181,40 +175,24 @@ function setStatus(state) {
 /* ------------------------------------------------------------
    TAB SWITCHING
    ------------------------------------------------------------ */
-
-/**
- * Switch the active simulation tab.
- * Stops the current sim, shows the correct sidebar controls,
- * and resets.
- * @param {string} name - 'projectile' | 'collision' | 'pendulum' | 'work'
- */
 function switchSim(name) {
   stopSim();
   currentSim = name;
-
-  // Update tab button active state
   var names = ['projectile', 'collision', 'pendulum', 'work'];
   document.querySelectorAll('.sim-tab').forEach(function(t, i) {
     t.classList.toggle('active', names[i] === name);
   });
-
-  // Show/hide the relevant sidebar section
   names.forEach(function(n) {
     var el = document.getElementById('ctrl-' + n);
     if (el) el.classList.toggle('hidden', n !== name);
   });
-
-  // Close mobile sidebar if open
   closeMobileSidebar();
-
   resetSim();
 }
 
 /* ------------------------------------------------------------
    CSV EXPORT DISPATCH
    ------------------------------------------------------------ */
-
-/** Export data for the currently active simulation. */
 function exportCurrentCSV() {
   if (currentSim === 'projectile') exportProjectileCSV();
   if (currentSim === 'collision')  exportCollisionCSV();
@@ -225,12 +203,10 @@ function exportCurrentCSV() {
 /* ------------------------------------------------------------
    MOBILE SIDEBAR
    ------------------------------------------------------------ */
-
 function openMobileSidebar() {
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('sidebarOverlay').classList.add('visible');
 }
-
 function closeMobileSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebarOverlay').classList.remove('visible');
@@ -240,21 +216,11 @@ function closeMobileSidebar() {
    KEYBOARD SHORTCUTS
    ------------------------------------------------------------ */
 document.addEventListener('keydown', function(e) {
-  // Don't fire when typing in an input
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-
   switch (e.key) {
-    case ' ':
-      e.preventDefault();
-      handleMainBtn();
-      break;
-    case 'r': case 'R':
-      resetSim();
-      break;
-    case 'ArrowRight':
-      // Step one frame forward
-      stepFrame();
-      break;
+    case ' ':           e.preventDefault(); handleMainBtn(); break;
+    case 'r': case 'R': resetSim(); break;
+    case 'ArrowRight':  stepFrame(); break;
     case '1': switchSim('projectile'); break;
     case '2': switchSim('collision');  break;
     case '3': switchSim('pendulum');   break;
