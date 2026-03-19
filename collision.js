@@ -976,21 +976,19 @@ function stepCollision(dt) {
 
   /* ---- Initialise on first frame ---- */
   if (simTime <= dt + 0.001) {
-    /* Convert physical velocities to pixel/s using a consistent scale:
-       1 m/s in physics = 40 px/s on screen (same as old 0.05 factor: px_norm/s * trackW ≈ 40px/s) */
+    /* Positions were already set correctly by updateCollision() / resetCollision().
+       Only reset velocities, flags and data — do NOT overwrite x positions.
+       This prevents the "jump to left edge" glitch on Start after Reset. */
     var PX_PER_MS = 40;
-    col.b1 = {
-      x:    Wmin + 0.12 * trackW,   /* start at 12% of track */
-      vPx:  v1i * PX_PER_MS
-    };
-    col.b2 = {
-      x:    Wmin + 0.78 * trackW,   /* start at 78% of track */
-      vPx:  v2i * PX_PER_MS
-    };
-    col.collided    = false;
-    col.separating  = false;        /* tracks whether balls are moving apart */
-    col.phase       = 'pre';
-    col.data        = [];
+    col.b1.vPx   = v1i * PX_PER_MS;
+    col.b2.vPx   = v2i * PX_PER_MS;
+    /* Snap starting positions to correct track fractions in case canvas was
+       resized between Reset and Start */
+    col.b1.x     = Wmin + 0.12 * trackW;
+    col.b2.x     = Wmin + 0.78 * trackW;
+    col.collided = false;
+    col.phase    = 'pre';
+    col.data     = [];
   }
 
   /* ---- Step 1: Move both objects ---- */
