@@ -28,8 +28,8 @@
    ANIMATION STATE
    ============================================================ */
 var col = {
-  b1: { x: 0.12, v: 0 },
-  b2: { x: 0.78, v: 0 },
+  b1: { x: null, vPx: 0 },   /* null = not yet positioned; set on first resize/draw */
+  b2: { x: null, vPx: 0 },
   collided: false,
   phase: 'pre',
   data: [],
@@ -39,8 +39,11 @@ var col = {
 
 function resetCollision() {
   var prev = { m1: col._m1, m2: col._m2, v1i: col._v1i, v2i: col._v2i };
+  /* Positions will be set in pixel space by updateCollision() below */
+  var _m = 60, _tw = Math.max(canvas.width - _m * 2, 100);
   col = {
-    b1: { x: 0.12, v: 0 }, b2: { x: 0.78, v: 0 },
+    b1: { x: _m + 0.12 * _tw, vPx: 0 },
+    b2: { x: _m + 0.78 * _tw, vPx: 0 },
     collided: false, phase: 'pre', data: [],
     _m1: prev.m1, _m2: prev.m2, _v1i: prev.v1i, _v2i: prev.v2i,
     _v1f: null, _v2f: null, _type: 'elastic'
@@ -879,8 +882,13 @@ function updateCollision() {
   col._type = type;
 
   if (!simRunning) {
-    col.b1 = { x: 0.12, v: col._v1i * 0.05 };
-    col.b2 = { x: 0.78, v: col._v2i * 0.05 };
+    /* Initialise in PIXEL space — same geometry as stepCollision uses.
+       margin=60, trackW=canvas.width-120. Fallback if canvas not sized yet. */
+    var _margin = 60;
+    var _trackW = Math.max(canvas.width - _margin * 2, 100);
+    var PX_PER_MS = 40;
+    col.b1 = { x: _margin + 0.12 * _trackW, vPx: col._v1i * PX_PER_MS };
+    col.b2 = { x: _margin + 0.78 * _trackW, vPx: col._v2i * PX_PER_MS };
     col.phase = 'pre'; col.collided = false;
     drawCollision();
   }
@@ -1115,7 +1123,12 @@ function drawCollision() {
   var r1px = Math.min(Math.max(Math.sqrt(m1) * 14, 12), 45);
   var r2px = Math.min(Math.max(Math.sqrt(m2) * 14, 12), 45);
 
-  /* Ball positions come directly from pixel state */
+  /* Ball positions come directly from pixel state.
+     If not yet initialised (null), place at default track fractions. */
+  if (col.b1.x === null) {
+    col.b1.x = Wmin + 0.12 * trackW;
+    col.b2.x = Wmin + 0.78 * trackW;
+  }
   var b1x = col.b1.x;
   var b2x = col.b2.x;
 
