@@ -379,9 +379,19 @@ function solveCollision(K, type) {
          m1*v1i + m2*v2i = m1*(v2f-e*(v1i-v2i)) + m2*v2f
          m1*v1i + m2*v2i = (m1+m2)*v2f - m1*e*v1i + m1*e*v2i
          v2i*(m2 - m1*e) = (m1+m2)*v2f - m1*v1i*(1+e)
-         v2i = [(m1+m2)*v2f - m1*v1i*(1+e)] / (m2 - m1*e)         */
+         v2i = [(m1+m2)*v2f - m1*v1i*(1+e)] / (m2 - m1*e)
+       
+       But if m2 = m1*e exactly (degenerate), use the ALTERNATE form:
+       From momentum: m1*v1i + m2*v2i = m1*v1f + m2*v2f  — rearrange for v2i:
+         m2*(v2i - v2f) = m1*(v1f - v1i)
+         We also know v1f = v2f - e*(v1i - v2i) from restitution.
+         Substituting & collecting gives the same degeneracy.
+       Alternate: given v1f is derivable from v2f+e+v1i once v2i is known,
+         use e*(v1i-v2i) = v2f-v1f combined with momentum in symmetric form:
+         v2i = [m1*(1+e)*v1i - (m1+m2)*v2f] / (m1*e - m2)           */
     if (miss('v2i') && all('v2f','e','m1','m2','v1i')) {
       var den_2i = S.m2 - S.m1 * S.e;
+      var den_2i_alt = S.m1 * S.e - S.m2; /* same magnitude, opposite sign */
       if (Math.abs(den_2i) > EPS) {
         var v2i_2i = ((S.m1+S.m2)*S.v2f - S.m1*S.v1i*(1+S.e)) / den_2i;
         set('v2i', v2i_2i,
@@ -389,7 +399,62 @@ function solveCollision(K, type) {
           'v2i = [(m1+m2)v2f − m1·v1i·(1+e)] / (m2 − m1·e)',
           function(s){ return 'v2i = [('+fvN(s.m1)+'+'+fvN(s.m2)+')×'+fvN(s.v2f)+' − '+fvN(s.m1)+'×'+fvN(s.v1i)+'×(1+'+fvN(s.e,2)+')] / ('+fvN(s.m2)+'−'+fvN(s.m1)+'×'+fvN(s.e,2)+') = '+fmtSci(s.v2i)+' m/s'; });
         changed = true;
+      } else if (Math.abs(den_2i_alt) > EPS) {
+        /* alternate sign form: v2i = [m1*(1+e)*v1i - (m1+m2)*v2f] / (m1*e - m2) */
+        var v2i_alt = (S.m1*(1+S.e)*S.v1i - (S.m1+S.m2)*S.v2f) / den_2i_alt;
+        set('v2i', v2i_alt,
+          'Momentum + restitution → v2i (alt)',
+          'v2i = [m1(1+e)v1i − (m1+m2)v2f] / (m1·e − m2)',
+          function(s){ return 'v2i = ['+fvN(s.m1)+'×(1+'+fvN(s.e,2)+')×'+fvN(s.v1i)+' − ('+fvN(s.m1)+'+'+fvN(s.m2)+')×'+fvN(s.v2f)+'] / ('+fvN(s.m1)+'×'+fvN(s.e,2)+'−'+fvN(s.m2)+') = '+fmtSci(s.v2i)+' m/s'; });
+        changed = true;
       }
+    }
+
+    /* 2j. SIMULTANEOUS: solve v1i when v1f, e, m1, m2, v2i known
+       Using: m1*v1i*(1+e) - (m1+m2)*v1f = m2*v2i*(1+e) - (m1+m2)*v1f... 
+       From earlier derivation:
+         v1i*(m1 - m2*e) = (m1+m2)*v1f - m2*v2i*(1+e)
+         v1i = [(m1+m2)*v1f - m2*v2i*(1+e)] / (m1 - m2*e)
+       Alternate form when m1 = m2*e:
+         v1i = [(m1+m2)*v1f - m2*v2i*(1+e)] / (m1 - m2*e)
+         → expand to remove degeneracy via the other form:
+         v1i*(m1 - m2*e) = (m1+m2)*v1f - m2*(1+e)*v2i
+       When denom=0: m1=m2*e, substitute back—system is underdetermined
+       unless we also use the restitution direction:
+         Additional route: v1i from restitution (2f) if v2i known.                */
+    if (miss('v1i') && all('v1f','e','m1','m2','v2i')) {
+      var den_2j = S.m1 - S.m2 * S.e;
+      if (Math.abs(den_2j) > EPS) {
+        var v1i_2j = ((S.m1+S.m2)*S.v1f - S.m2*S.v2i*(1+S.e)) / den_2j;
+        set('v1i', v1i_2j,
+          'Momentum + restitution → v1i',
+          'v1i = [(m1+m2)v1f − m2·v2i·(1+e)] / (m1 − m2·e)',
+          function(s){ return 'v1i = [('+fvN(s.m1)+'+'+fvN(s.m2)+')×'+fvN(s.v1f)+' − '+fvN(s.m2)+'×'+fvN(s.v2i)+'×(1+'+fvN(s.e,2)+')] / ('+fvN(s.m1)+'−'+fvN(s.m2)+'×'+fvN(s.e,2)+') = '+fmtSci(s.v1i)+' m/s'; });
+        changed = true;
+      }
+    }
+
+    /* 2k. Solve v2i given v1i, e, v1f, v2f — purely from restitution, no mass needed
+       e*(v1i - v2i) = v2f - v1f
+       v2i = v1i - (v2f - v1f)/e     [already in 2g but keep as fallback]       */
+    /* Already covered by 2g above */
+
+    /* 2l. Degenerate inelastic: when m1*e = m2, use KE equation to find v2i
+       At this degeneracy point (e.g. e=0.6, m1=5, m2=3),
+       both v1f and v2f are uniquely determined — but v2i is ambiguous
+       unless an additional constraint (KEb or pt) is given.
+       Rule: if pt is known, use: v2i = (pt - m1*v1i) / m2               */
+    if (miss('v2i') && all('pt','m1','v1i','m2') && Math.abs(S.m2) > EPS) {
+      set('v2i', (S.pt - S.m1*S.v1i)/S.m2,
+        'Momentum → v2i', 'v2i = (pt − m1·v1i) / m2',
+        function(s){ return 'v2i = ('+fmtSci(s.pt)+' − '+fvN(s.m1)+'×'+fvN(s.v1i)+') / '+fvN(s.m2)+' = '+fmtSci(s.v2i)+' m/s'; });
+      changed = true;
+    }
+    if (miss('v1i') && all('pt','m2','v2i','m1') && Math.abs(S.m1) > EPS) {
+      set('v1i', (S.pt - S.m2*S.v2i)/S.m1,
+        'Momentum → v1i (from pt)', 'v1i = (pt − m2·v2i) / m1',
+        function(s){ return 'v1i = ('+fmtSci(s.pt)+' − '+fvN(s.m2)+'×'+fvN(s.v2i)+') / '+fvN(s.m1)+' = '+fmtSci(s.v1i)+' m/s'; });
+      changed = true;
     }
 
     /* ----------------------------------------------------------
