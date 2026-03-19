@@ -28,6 +28,11 @@ function resetCollision() {
     collided: false, phase: 'pre', data: [],
     _m1: col._m1, _m2: col._m2, _v1: col._v1, _v2: col._v2
   };
+  ['col-m1','col-m2','col-v1','col-v2','col-v1a','col-v2a',
+   'col-KEb','col-KEa','col-KElost','col-pt'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   updateCollision();
 }
 
@@ -189,10 +194,65 @@ var COL_EQUATIONS = [
       KElost: function(s) {
         if (s.KEb === null || s.KEa === null) return null;
         return s.KEb - s.KEa;
+      },
+      KEb: function(s) {
+        if (s.KElost === null || s.KEa === null) return null;
+        return s.KEa + s.KElost;
+      },
+      KEa: function(s) {
+        if (s.KElost === null || s.KEb === null) return null;
+        return s.KEb - s.KElost;
       }
     },
     buildSub: function(s) {
       return 'KElost = ' + fmtSci(s.KEb) + ' - ' + fmtSci(s.KEa) + ' = ' + fmtSci(s.KElost) + ' J';
+    }
+  },
+
+  /* Back-solve m1 from elastic post-collision v1a, v2a, v2 */
+  { name: 'Elastic mass from v after', formula: 'm1 from elastic v1a, v2a',
+    solve: {
+      m1: function(s) {
+        if (s.v1a === null || s.v2a === null || s.v1 === null || s.v2 === null) return null;
+        if (s._type !== 'elastic') return null;
+        // v2a = 2m1v1/(m1+m2) + (m2-m1)v2/(m1+m2) — solve for m1 given m2
+        // From momentum: m1v1 + m2v2 = m1v1a + m2v2a
+        // => m1(v1 - v1a) = m2(v2a - v2)
+        if (s.m2 === null) return null;
+        var dv1 = s.v1 - s.v1a;
+        if (Math.abs(dv1) < 1e-12) return null;
+        return s.m2 * (s.v2a - s.v2) / dv1;
+      },
+      m2: function(s) {
+        if (s.v1a === null || s.v2a === null || s.v1 === null || s.v2 === null) return null;
+        if (s._type !== 'elastic') return null;
+        if (s.m1 === null) return null;
+        var dv2 = s.v2a - s.v2;
+        if (Math.abs(dv2) < 1e-12) return null;
+        return s.m1 * (s.v1 - s.v1a) / dv2;
+      }
+    },
+    buildSub: function(s) {
+      return 'm1(v1-v1a) = m2(v2a-v2) → m1 = ' + fmtSci(s.m1) + ' kg';
+    }
+  },
+
+  /* Back-solve v1 from total momentum + v2 + masses */
+  { name: 'v1 from momentum', formula: 'v1 = (pt - m2*v2) / m1',
+    solve: {
+      v1: function(s) {
+        if (s.pt === null || s.m1 === null || s.m2 === null || s.v2 === null) return null;
+        if (Math.abs(s.m1) < 1e-12) return null;
+        return (s.pt - s.m2 * s.v2) / s.m1;
+      },
+      v2: function(s) {
+        if (s.pt === null || s.m1 === null || s.m2 === null || s.v1 === null) return null;
+        if (Math.abs(s.m2) < 1e-12) return null;
+        return (s.pt - s.m1 * s.v1) / s.m2;
+      }
+    },
+    buildSub: function(s) {
+      return 'v1 = (' + fmtSci(s.pt) + ' - ' + fvN(s.m2) + '×' + fvN(s.v2) + ') / ' + fvN(s.m1) + ' = ' + fmtSci(s.v1) + ' m/s';
     }
   }
 ];
@@ -215,12 +275,18 @@ var COL_META = {
 function updateCollision() {
   var type = document.getElementById('col-type').value;
   var s = {
-    m1: getNullable('col-m1'), m2: getNullable('col-m2'),
-    v1: getNullable('col-v1'), v2: getNullable('col-v2'),
-    v1a: null, v2a: null,
+    m1:     getNullable('col-m1'),
+    m2:     getNullable('col-m2'),
+    v1:     getNullable('col-v1'),
+    v2:     getNullable('col-v2'),
+    v1a:    getNullable('col-v1a'),
+    v2a:    getNullable('col-v2a'),
+    KEb:    getNullable('col-KEb'),
+    KEa:    getNullable('col-KEa'),
+    KElost: getNullable('col-KElost'),
+    pt:     getNullable('col-pt'),
     p1b: null, p2b: null,
-    KEb: null, KEa: null, pt: null, KElost: null,
-    _type: type  // pass collision type into equations
+    _type: type
   };
 
   /* Input validation */
