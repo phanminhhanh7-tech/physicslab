@@ -265,12 +265,14 @@
       <div class="solve-for-area">
         <div class="sidebar-section-title">Solve For</div>
         <select class="solve-select" id="col-solveFor" onchange="updateCollision()">
-          <option value="v1a">v1 after collision</option>
-          <option value="v2a">v2 after collision</option>
+          <option value="v1f">v1 final (v1f)</option>
+          <option value="v2f">v2 final (v2f)</option>
+          <option value="vf">vf — perfectly inelastic</option>
           <option value="m1">Mass 1 (m1)</option>
           <option value="m2">Mass 2 (m2)</option>
-          <option value="v1">Velocity 1 before</option>
-          <option value="v2">Velocity 2 before</option>
+          <option value="v1i">v1 initial (v1i)</option>
+          <option value="v2i">v2 initial (v2i)</option>
+          <option value="e">Restitution (e)</option>
           <option value="KEb">KE before</option>
           <option value="KEa">KE after</option>
           <option value="KElost">KE lost</option>
@@ -279,152 +281,117 @@
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-section-title">
-          Variables
-          <span style="font-size:9px;color:var(--text-dim);font-family:'DM Sans';text-transform:none;letter-spacing:0">
-            (blank = unknown)
-          </span>
-        </div>
+        <div class="sidebar-section-title">Variables <span style="font-size:9px;color:var(--text-dim);font-family:'DM Sans';text-transform:none;letter-spacing:0">(blank = unknown)</span></div>
 
         <div style="font-size:10px;color:var(--accent3);font-family:'Space Mono';letter-spacing:1px;margin-bottom:8px;text-transform:uppercase">Object 1 (cyan)</div>
-
         <div class="input-group">
-          <div class="input-label">
-            <span>
-              Mass (m1)
-              <span class="tip-icon" data-tip="Mass of object 1 in kilograms. Must be positive." data-tip-title="m1">?</span>
-            </span>
-            <span class="unit">kg</span>
-          </div>
+          <div class="input-label"><span>Mass (m1) <span class="tip-icon" data-tip="Mass of object 1. Must be positive." data-tip-title="m1">?</span></span><span class="unit">kg</span></div>
           <input type="number" id="col-m1" placeholder="e.g. 5" step="any" oninput="updateCollision()">
         </div>
-
         <div class="input-group">
-          <div class="input-label">
-            <span>
-              Velocity before (v1)
-              <span class="tip-icon" data-tip="Positive = rightward. Negative = leftward." data-tip-title="v1">?</span>
-            </span>
-            <span class="unit">m/s</span>
-          </div>
-          <input type="number" id="col-v1" placeholder="e.g. 8" step="any" oninput="updateCollision()">
+          <div class="input-label"><span>v1 initial <span class="tip-icon" data-tip="Velocity before collision. Positive=right, negative=left." data-tip-title="v1i">?</span></span><span class="unit">m/s</span></div>
+          <input type="number" id="col-v1i" placeholder="e.g. 8" step="any" oninput="updateCollision()">
+        </div>
+        <div class="input-group">
+          <div class="input-label"><span>v1 final <span class="tip-icon" data-tip="Velocity of object 1 after collision." data-tip-title="v1f">?</span></span><span class="unit">m/s</span></div>
+          <input type="number" id="col-v1f" placeholder="e.g. -2" step="any" oninput="updateCollision()">
         </div>
 
         <div style="font-size:10px;color:var(--accent2);font-family:'Space Mono';letter-spacing:1px;margin:10px 0 8px;text-transform:uppercase">Object 2 (orange)</div>
-
         <div class="input-group">
           <div class="input-label"><span>Mass (m2)</span><span class="unit">kg</span></div>
           <input type="number" id="col-m2" placeholder="e.g. 3" step="any" oninput="updateCollision()">
         </div>
-
         <div class="input-group">
-          <div class="input-label">
-            <span>
-              Velocity before (v2)
-              <span class="tip-icon" data-tip="Use negative values for leftward velocity. E.g. −3 means moving left at 3 m/s." data-tip-title="v2">?</span>
-            </span>
-            <span class="unit">m/s</span>
-          </div>
-          <input type="number" id="col-v2" placeholder="e.g. -3" step="any" oninput="updateCollision()">
+          <div class="input-label"><span>v2 initial <span class="tip-icon" data-tip="Use negative for leftward motion." data-tip-title="v2i">?</span></span><span class="unit">m/s</span></div>
+          <input type="number" id="col-v2i" placeholder="e.g. -3" step="any" oninput="updateCollision()">
+        </div>
+        <div class="input-group">
+          <div class="input-label"><span>v2 final</span><span class="unit">m/s</span></div>
+          <input type="number" id="col-v2f" placeholder="e.g. 6" step="any" oninput="updateCollision()">
         </div>
 
-        <div style="font-size:10px;color:var(--accent4);font-family:'Space Mono';letter-spacing:1px;margin:12px 0 8px;text-transform:uppercase">After Collision</div>
-
+        <div style="font-size:10px;color:var(--text-dim);font-family:'Space Mono';letter-spacing:1px;margin:10px 0 8px;text-transform:uppercase">Energy &amp; Momentum</div>
         <div class="input-group">
-          <div class="input-label">
-            <span>v1 after (v1a)<span class="tip-icon" data-tip="Velocity of object 1 after collision. Enter as known or leave blank." data-tip-title="v1a">?</span></span>
-            <span class="unit">m/s</span>
-          </div>
-          <input type="number" id="col-v1a" placeholder="e.g. −2" step="any" oninput="updateCollision()">
+          <div class="input-label"><span>vf (stuck) <span class="tip-icon" data-tip="Shared final velocity for perfectly inelastic." data-tip-title="vf">?</span></span><span class="unit">m/s</span></div>
+          <input type="number" id="col-vf" placeholder="e.g. 4.4" step="any" oninput="updateCollision()">
         </div>
-
         <div class="input-group">
-          <div class="input-label">
-            <span>v2 after (v2a)<span class="tip-icon" data-tip="Velocity of object 2 after collision." data-tip-title="v2a">?</span></span>
-            <span class="unit">m/s</span>
-          </div>
-          <input type="number" id="col-v2a" placeholder="e.g. 6" step="any" oninput="updateCollision()">
+          <div class="input-label"><span>Restitution (e) <span class="tip-icon" data-tip="0=perfectly inelastic, 1=elastic. Use for inelastic type." data-tip-title="e">?</span></span><span class="unit">0–1</span></div>
+          <input type="number" id="col-e" placeholder="0–1" step="any" min="0" max="1" oninput="updateCollision()">
         </div>
-
-        <div style="font-size:10px;color:var(--text-dim);font-family:'Space Mono';letter-spacing:1px;margin:12px 0 8px;text-transform:uppercase">Energy &amp; Momentum</div>
-
         <div class="input-group">
-          <div class="input-label">
-            <span>KE before (KEb)<span class="tip-icon" data-tip="Total kinetic energy of both objects before collision." data-tip-title="KEb">?</span></span>
-            <span class="unit">J</span>
-          </div>
+          <div class="input-label"><span>KE before</span><span class="unit">J</span></div>
           <input type="number" id="col-KEb" placeholder="e.g. 200" step="any" oninput="updateCollision()">
         </div>
-
         <div class="input-group">
-          <div class="input-label">
-            <span>KE after (KEa)<span class="tip-icon" data-tip="Total KE after. Equal to KEb for elastic." data-tip-title="KEa">?</span></span>
-            <span class="unit">J</span>
-          </div>
+          <div class="input-label"><span>KE after</span><span class="unit">J</span></div>
           <input type="number" id="col-KEa" placeholder="e.g. 200" step="any" oninput="updateCollision()">
         </div>
-
         <div class="input-group">
-          <div class="input-label">
-            <span>KE lost (KElost)<span class="tip-icon" data-tip="KElost = KEb − KEa. Zero for elastic." data-tip-title="KElost">?</span></span>
-            <span class="unit">J</span>
-          </div>
+          <div class="input-label"><span>KE lost <span class="tip-icon" data-tip="KEb - KEa. Zero for elastic." data-tip-title="KElost">?</span></span><span class="unit">J</span></div>
           <input type="number" id="col-KElost" placeholder="e.g. 0" step="any" oninput="updateCollision()">
         </div>
-
         <div class="input-group">
-          <div class="input-label">
-            <span>Total momentum (pt)<span class="tip-icon" data-tip="pt = m1v1 + m2v2. Conserved in all collisions." data-tip-title="pt">?</span></span>
-            <span class="unit">kg·m/s</span>
-          </div>
+          <div class="input-label"><span>Total momentum <span class="tip-icon" data-tip="m1v1i + m2v2i. Always conserved." data-tip-title="pt">?</span></span><span class="unit">kg·m/s</span></div>
           <input type="number" id="col-pt" placeholder="e.g. 31" step="any" oninput="updateCollision()">
         </div>
+        <div class="input-group">
+          <div class="input-label"><span>p1 initial</span><span class="unit">kg·m/s</span></div>
+          <input type="number" id="col-p1i" placeholder="e.g. 40" step="any" oninput="updateCollision()">
+        </div>
+        <div class="input-group">
+          <div class="input-label"><span>p2 initial</span><span class="unit">kg·m/s</span></div>
+          <input type="number" id="col-p2i" placeholder="e.g. -9" step="any" oninput="updateCollision()">
+        </div>
 
-        <div class="input-group" style="margin-top:10px">
-          <div class="input-label">
-            <span>Collision Type<span class="tip-icon" data-tip="Elastic: KE conserved. Perfectly inelastic: objects stick together." data-tip-title="Type">?</span></span>
-          </div>
+        <div class="input-group" style="margin-top:12px">
+          <div class="input-label"><span>Collision Type</span></div>
           <select id="col-type" onchange="updateCollision()">
-            <option value="elastic">Elastic (KE conserved)</option>
-            <option value="inelastic">Perfectly Inelastic</option>
+            <option value="elastic">Elastic (e=1, KE conserved)</option>
+            <option value="inelastic">Inelastic (enter e)</option>
+            <option value="perfect">Perfectly Inelastic (e=0, stick)</option>
           </select>
         </div>
+
+        <div id="col-warnings" style="display:none;margin-top:8px;padding:7px 10px;background:rgba(255,62,138,0.1);border:1px solid rgba(255,62,138,0.4);border-radius:6px;font-size:10px;color:var(--accent4);font-family:Space Mono,monospace;line-height:1.5;"></div>
       </div>
 
-      <!-- Physics Assumptions -->
       <div class="sidebar-section">
         <div class="sidebar-section-title">Assumptions</div>
         <div class="assumptions-panel">
           <div class="assumption-item">1D head-on collision</div>
-          <div class="assumption-item">No friction during collision</div>
-          <div class="assumption-item">Point-mass objects</div>
-          <div class="assumption-item">Isolated system (momentum conserved)</div>
-          <div class="assumption-item">Elastic: KE also conserved</div>
+          <div class="assumption-item">Isolated system — momentum always conserved</div>
+          <div class="assumption-item">Elastic: e=1, KE conserved</div>
+          <div class="assumption-item">Perfectly inelastic: e=0, objects stick</div>
+          <div class="assumption-item">Inelastic: 0 &lt; e &lt; 1, enter e to constrain</div>
         </div>
       </div>
 
-      <!-- Solver Steps -->
       <div class="sidebar-section">
         <div class="sidebar-section-title">Solver Steps</div>
         <div id="col-solver-steps" class="solver-steps-panel">
-          <div class="step-empty-msg">Fill in m1, v1, m2, v2 above.</div>
+          <div class="step-empty-msg">Enter any known variables — solver uses momentum, restitution and KE laws.</div>
         </div>
       </div>
 
-      <!-- Results -->
       <div class="sidebar-section">
         <div class="sidebar-section-title">Results</div>
         <div class="results-grid">
-          <div class="result-card" id="crc-v1a">   <div class="r-label">v1 after</div>   <div class="r-value" id="col-r-v1a">--</div></div>
-          <div class="result-card" id="crc-v2a">   <div class="r-label">v2 after</div>   <div class="r-value" id="col-r-v2a">--</div></div>
-          <div class="result-card" id="crc-m1">    <div class="r-label">Mass 1 (m1)</div><div class="r-value" id="col-r-m1">--</div></div>
-          <div class="result-card" id="crc-m2">    <div class="r-label">Mass 2 (m2)</div><div class="r-value" id="col-r-m2">--</div></div>
-          <div class="result-card" id="crc-p1b">   <div class="r-label">p1 before</div>  <div class="r-value" id="col-r-p1b">--</div></div>
-          <div class="result-card" id="crc-p2b">   <div class="r-label">p2 before</div>  <div class="r-value" id="col-r-p2b">--</div></div>
-          <div class="result-card" id="crc-KEb">   <div class="r-label">KE before</div>  <div class="r-value" id="col-r-keb">--</div></div>
-          <div class="result-card" id="crc-KEa">   <div class="r-label">KE after</div>   <div class="r-value" id="col-r-kea">--</div></div>
-          <div class="result-card" id="crc-pt">    <div class="r-label">p total</div>    <div class="r-value" id="col-r-pt">--</div></div>
-          <div class="result-card" id="crc-KElost"><div class="r-label">KE lost</div>    <div class="r-value" id="col-r-kel">--</div></div>
+          <div class="result-card" id="crc-m1">    <div class="r-label">m1</div>          <div class="r-value" id="col-r-m1">--</div></div>
+          <div class="result-card" id="crc-m2">    <div class="r-label">m2</div>          <div class="r-value" id="col-r-m2">--</div></div>
+          <div class="result-card" id="crc-v1i">   <div class="r-label">v1 initial</div>  <div class="r-value" id="col-r-v1i">--</div></div>
+          <div class="result-card" id="crc-v2i">   <div class="r-label">v2 initial</div>  <div class="r-value" id="col-r-v2i">--</div></div>
+          <div class="result-card" id="crc-v1f">   <div class="r-label">v1 final</div>    <div class="r-value" id="col-r-v1f">--</div></div>
+          <div class="result-card" id="crc-v2f">   <div class="r-label">v2 final</div>    <div class="r-value" id="col-r-v2f">--</div></div>
+          <div class="result-card" id="crc-vf">    <div class="r-label">vf (stuck)</div>  <div class="r-value" id="col-r-vf">--</div></div>
+          <div class="result-card" id="crc-e">     <div class="r-label">Restitution e</div><div class="r-value" id="col-r-e">--</div></div>
+          <div class="result-card" id="crc-pt">    <div class="r-label">p total</div>     <div class="r-value" id="col-r-pt">--</div></div>
+          <div class="result-card" id="crc-p1i">   <div class="r-label">p1 initial</div>  <div class="r-value" id="col-r-p1i">--</div></div>
+          <div class="result-card" id="crc-p2i">   <div class="r-label">p2 initial</div>  <div class="r-value" id="col-r-p2i">--</div></div>
+          <div class="result-card" id="crc-KEb">   <div class="r-label">KE before</div>   <div class="r-value" id="col-r-keb">--</div></div>
+          <div class="result-card" id="crc-KEa">   <div class="r-label">KE after</div>    <div class="r-value" id="col-r-kea">--</div></div>
+          <div class="result-card" id="crc-KElost"><div class="r-label">KE lost</div>     <div class="r-value" id="col-r-kel">--</div></div>
         </div>
       </div>
 
