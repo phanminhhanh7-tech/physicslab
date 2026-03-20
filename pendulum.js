@@ -252,7 +252,7 @@ function updatePendulum() {
   pen._theta0 = (theta0_rad !== null) ? theta0_rad : Math.PI / 4;
   pen._damp   = getNullable('pen-damp') || 0;
 
-  if (!simRunning) drawPendulum();
+  if (!simRunning && currentSim === 'pendulum')   drawPendulum();
 }
 
 function _setBar(barId, lblId, val, maxVal) {
@@ -369,114 +369,204 @@ function stepPendulum(dt) {
    ------------------------------------------------------------ */
 function drawPendulum() {
   var W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#080b12'; ctx.fillRect(0, 0, W, H);
-  drawGrid(ctx, W, H);
 
-  var L = pen._L, m = pen._m, g = pen._g;
+  /* Shared environment draw (grid + vignette) */
+  drawEnvironment(ctx, W, H);
+
+  var L = pen._L || 3, m = pen._m || 2, g = pen._g || 9.81;
+  var damp = pen._damp || 0;
 
   var pivotX = W / 2;
-  var pivotY = H * 0.18;
-  var pixL   = Math.min(H * 0.52, W * 0.33);
+  var pivotY = H * 0.16;
+  var pixL   = Math.min(H * 0.50, W * 0.32);
 
   var bobX = pivotX + Math.sin(pen.theta) * pixL;
   var bobY = pivotY + Math.cos(pen.theta) * pixL;
-  var bobR = Math.min(Math.max(Math.sqrt(m) * 8, 10), 28);
+  var bobR = Math.min(Math.max(Math.sqrt(m) * 8, 10), 30);
 
-  /* Angle arc (swing range) */
-  var theta0 = pen._theta0;
-  ctx.strokeStyle = 'rgba(0,212,255,0.08)';
-  ctx.lineWidth = 80; ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(pivotX, pivotY, pixL, -Math.PI / 2 - theta0, -Math.PI / 2 + theta0);
-  ctx.stroke(); ctx.lineCap = 'butt';
-
-  /* Trail */
-  if (pen.trail.length > 1) {
-    ctx.beginPath();
-    for (var i = 0; i < pen.trail.length; i++) {
-      var tx = pivotX + Math.sin(pen.trail[i].theta) * pixL;
-      var ty = pivotY + Math.cos(pen.trail[i].theta) * pixL;
-      var alpha = i / pen.trail.length;
-      if (i === 0) ctx.moveTo(tx, ty);
-      else         ctx.lineTo(tx, ty);
-    }
-    ctx.strokeStyle = 'rgba(0,212,255,0.35)';
-    ctx.lineWidth = 2; ctx.stroke();
-  }
-
-  /* Rod */
+  /* ---- Ceiling mount (support structure) ---- */
   ctx.save();
-  ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 6;
-  ctx.strokeStyle = 'rgba(0,212,255,0.6)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(pivotX, pivotY); ctx.lineTo(bobX, bobY); ctx.stroke();
+  ctx.fillStyle = '#1e2a42';
+  ctx.strokeStyle = 'rgba(0,212,255,0.3)';
+  ctx.lineWidth = 1;
+  ctx.fillRect(pivotX - 24, pivotY - 18, 48, 18);
+  ctx.strokeRect(pivotX - 24, pivotY - 18, 48, 18);
+  /* Bracket lines */
+  ctx.strokeStyle = 'rgba(0,212,255,0.2)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pivotX - 16, pivotY - 18); ctx.lineTo(pivotX - 8, pivotY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pivotX + 16, pivotY - 18); ctx.lineTo(pivotX + 8, pivotY); ctx.stroke();
   ctx.restore();
 
-  /* Pivot */
-  ctx.fillStyle = '#1e2a42'; ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(pivotX, pivotY, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  /* ---- Swing arc (ghost path) ---- */
+  var theta0 = pen._theta0;
+  if (Math.abs(theta0) > 0.01) {
+    /* Faint filled arc showing sweep zone */
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(pivotX, pivotY);
+    ctx.arc(pivotX, pivotY, pixL, -Math.PI/2 - Math.abs(theta0), -Math.PI/2 + Math.abs(theta0));
+    ctx.closePath();
+    var arcFill = ctx.createRadialGradient(pivotX, pivotY, 0, pivotX, pivotY, pixL);
+    arcFill.addColorStop(0, 'rgba(0,212,255,0)');
+    arcFill.addColorStop(1, 'rgba(0,212,255,0.04)');
+    ctx.fillStyle = arcFill;
+    ctx.fill();
+    /* Arc border */
+    ctx.strokeStyle = 'rgba(0,212,255,0.12)';
+    ctx.lineWidth = 1; ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.arc(pivotX, pivotY, pixL, -Math.PI/2 - Math.abs(theta0), -Math.PI/2 + Math.abs(theta0));
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.restore();
+  }
 
-  /* Bob */
-  drawGlowCircle(ctx, bobX, bobY, bobR, '#00d4ff');
-  ctx.fillStyle = '#000'; ctx.font = 'bold 10px DM Sans';
+  /* ---- Faded trail (bob path) ---- */
+  if (pen.trail.length > 1) {
+    ctx.save();
+    for (var ti = 1; ti < pen.trail.length; ti++) {
+      var age   = ti / pen.trail.length;
+      var alpha = age * age * 0.5;
+      if (alpha < 0.02) continue;
+      var tx0 = pivotX + Math.sin(pen.trail[ti - 1].theta) * pixL;
+      var ty0 = pivotY + Math.cos(pen.trail[ti - 1].theta) * pixL;
+      var tx1 = pivotX + Math.sin(pen.trail[ti].theta) * pixL;
+      var ty1 = pivotY + Math.cos(pen.trail[ti].theta) * pixL;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth   = 1 + age * 1.5;
+      ctx.beginPath(); ctx.moveTo(tx0, ty0); ctx.lineTo(tx1, ty1); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  /* ---- Rod with gradient ---- */
+  ctx.save();
+  var rodGrad = ctx.createLinearGradient(pivotX, pivotY, bobX, bobY);
+  rodGrad.addColorStop(0, 'rgba(0,212,255,0.8)');
+  rodGrad.addColorStop(1, 'rgba(0,212,255,0.3)');
+  ctx.strokeStyle = rodGrad;
+  ctx.lineWidth   = 2.5;
+  ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 5;
+  ctx.beginPath(); ctx.moveTo(pivotX, pivotY); ctx.lineTo(bobX, bobY); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  /* ---- Pivot pin ---- */
+  ctx.save();
+  ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 10;
+  ctx.fillStyle   = '#0a1628';
+  ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(pivotX, pivotY, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  /* Inner pin */
+  ctx.fillStyle = '#00d4ff88';
+  ctx.beginPath(); ctx.arc(pivotX, pivotY, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  /* ---- Bob ---- */
+  ctx.save();
+  /* Shadow on imaginary floor */
+  var shadowAlpha = 0.12 * (1 - Math.abs(pen.theta) / (Math.PI / 2 + 0.1));
+  if (shadowAlpha > 0) {
+    var shadowY = pivotY + pixL + 10;
+    var shadowW = bobR * (1 + Math.abs(Math.sin(pen.theta)) * 0.5);
+    ctx.globalAlpha = shadowAlpha;
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    ctx.beginPath();
+    ctx.ellipse(bobX, shadowY, shadowW, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  /* Outer glow */
+  ctx.shadowColor = '#00d4ff';
+  ctx.shadowBlur  = 20 + Math.abs(pen.omega) * 3;
+  var bobGrad = ctx.createRadialGradient(bobX - bobR*0.3, bobY - bobR*0.3, 0, bobX, bobY, bobR);
+  bobGrad.addColorStop(0, '#ffffff');
+  bobGrad.addColorStop(0.25, '#a0efff');
+  bobGrad.addColorStop(0.65, '#00d4ff');
+  bobGrad.addColorStop(1,    '#007090');
+  ctx.fillStyle = bobGrad;
+  ctx.beginPath(); ctx.arc(bobX, bobY, bobR, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  /* Specular */
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath(); ctx.arc(bobX - bobR*0.28, bobY - bobR*0.28, bobR*0.32, 0, Math.PI*2); ctx.fill();
+  /* Mass label */
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.font = 'bold 10px DM Sans';
   ctx.textAlign = 'center'; ctx.fillText(m + 'kg', bobX, bobY + 4); ctx.textAlign = 'left';
+  ctx.restore();
 
-  /* Velocity vector (tangential) */
-  var speed = Math.abs(pen.omega) * pixL * 0.4;
-  if (speed > 3) {
-    var vDir = pen.omega > 0 ? 1 : -1;
+  /* ---- Velocity vector (tangential) ---- */
+  var speed = Math.abs(pen.omega) * pixL * 0.38;
+  if (speed > 4) {
+    var vDir  = pen.omega > 0 ? 1 : -1;
     var tangX = Math.cos(pen.theta) * vDir;
     var tangY = -Math.sin(pen.theta) * vDir;
     drawArrow(ctx, bobX, bobY, bobX + tangX * speed, bobY + tangY * speed, '#a8ff3e', 'v', 2);
   }
 
-  /* Gravity vector */
-  var gLen = Math.min(g * 3, 50);
-  drawArrow(ctx, bobX, bobY, bobX, bobY + gLen, '#ff6b35', 'g', 1.5);
+  /* ---- Gravity vector ---- */
+  var gLen = Math.min(g * 3.5, 55);
+  drawArrow(ctx, bobX, bobY + bobR + 2, bobX, bobY + bobR + 2 + gLen, '#ff6b35', 'g', 1.5);
 
-  /* Length label */
-  ctx.fillStyle = 'rgba(107,122,153,0.8)'; ctx.font = '11px Space Mono';
-  ctx.fillText('L = ' + fmtSci(L) + ' m', pivotX + 12, (pivotY + bobY) / 2);
+  /* ---- Labels ---- */
+  /* Rod midpoint label */
+  var midX = (pivotX + bobX) / 2, midY = (pivotY + bobY) / 2;
+  drawLabel(ctx, 'L = ' + fmtSci(L) + ' m', midX + 18, midY, 'rgba(107,122,153,0.9)', '10px Space Mono');
 
-  /* Period label */
-  var T = 2 * Math.PI * Math.sqrt(L / g);
-  ctx.fillStyle = 'rgba(0,212,255,0.7)';
-  ctx.fillText('T = ' + fmtSci(T) + ' s', margin || 20, 30);
+  /* Period + damping info badge */
+  var T  = 2 * Math.PI * Math.sqrt(L / g);
+  var info = 'T = ' + fmtSci(T) + ' s';
+  if (damp > 0) info += '  b = ' + fmtSci(damp);
+  drawLabel(ctx, info, 120, 22, 'rgba(0,212,255,0.8)', 'bold 11px Space Mono');
 
-  /* Energy graph (scrolling) */
+  /* Angle readout (live) */
+  var angleDeg = (pen.theta * 180 / Math.PI).toFixed(1);
+  drawLabel(ctx, 'θ = ' + angleDeg + '°', W - 100, 22, 'rgba(168,255,62,0.8)', '11px Space Mono');
+
+  /* ---- Energy graph ---- */
   if (pen.data.length > 2) {
-    var gx = 20, gy = H * 0.82, gw = W - 40, gh = H * 0.12;
-    ctx.fillStyle = 'rgba(10,13,20,0.75)';
-    ctx.fillRect(gx, gy, gw, gh);
-    ctx.strokeStyle = 'rgba(30,42,66,0.8)'; ctx.lineWidth = 1;
-    ctx.strokeRect(gx, gy, gw, gh);
+    var ex = 16, ey = H * 0.80, ew = W - 32, eh = H * 0.13;
 
-    var recent = pen.data.slice(-120);
+    /* Panel */
+    ctx.save();
+    ctx.fillStyle   = 'rgba(8,11,18,0.85)';
+    ctx.strokeStyle = 'rgba(30,42,66,0.9)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 4); ctx.fill(); ctx.stroke();
+
+    var recent = pen.data.slice(-160);
     var maxE   = Math.max.apply(null, recent.map(function(r){ return r[3] + r[4]; }));
-    if (maxE < 1) maxE = 1;
+    if (maxE < 0.1) maxE = 1;
 
-    /* KE line */
-    ctx.beginPath(); ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1.5;
+    function plotLine(col, idx) {
+      ctx.beginPath(); ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+      recent.forEach(function(r, i) {
+        var rx = ex + (i / Math.max(recent.length - 1, 1)) * ew;
+        var ry = ey + eh - (r[idx] / maxE) * (eh - 6);
+        if (i === 0) ctx.moveTo(rx, ry); else ctx.lineTo(rx, ry);
+      }); ctx.stroke();
+    }
+    plotLine('#00d4ff', 3); /* KE */
+    plotLine('#ff6b35', 4); /* PE */
+
+    /* Total E (sum) */
+    ctx.beginPath(); ctx.strokeStyle = 'rgba(168,255,62,0.4)'; ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
     recent.forEach(function(r, i) {
-      var rx = gx + (i / (recent.length - 1)) * gw;
-      var ry = gy + gh - (r[3] / maxE) * (gh - 4);
+      var rx = ex + (i / Math.max(recent.length - 1, 1)) * ew;
+      var ry = ey + eh - ((r[3]+r[4]) / maxE) * (eh - 6);
       if (i === 0) ctx.moveTo(rx, ry); else ctx.lineTo(rx, ry);
-    }); ctx.stroke();
+    }); ctx.stroke(); ctx.setLineDash([]);
 
-    /* PE line */
-    ctx.beginPath(); ctx.strokeStyle = '#ff6b35'; ctx.lineWidth = 1.5;
-    recent.forEach(function(r, i) {
-      var rx = gx + (i / (recent.length - 1)) * gw;
-      var ry = gy + gh - (r[4] / maxE) * (gh - 4);
-      if (i === 0) ctx.moveTo(rx, ry); else ctx.lineTo(rx, ry);
-    }); ctx.stroke();
-
-    ctx.fillStyle = '#00d4ff'; ctx.font = '9px Space Mono';
-    ctx.fillText('KE', gx + 4, gy + 12);
-    ctx.fillStyle = '#ff6b35';
-    ctx.fillText('PE', gx + 24, gy + 12);
-    ctx.fillStyle = 'rgba(107,122,153,0.7)';
-    ctx.fillText('Energy over time', gx + 50, gy + 12);
+    /* Legend */
+    ctx.font = '9px Space Mono';
+    ctx.fillStyle = '#00d4ff'; ctx.fillText('■ KE', ex + 6, ey + 12);
+    ctx.fillStyle = '#ff6b35'; ctx.fillText('■ PE', ex + 46, ey + 12);
+    ctx.fillStyle = 'rgba(168,255,62,0.7)'; ctx.fillText('– E', ex + 86, ey + 12);
+    ctx.restore();
   }
 }
 
