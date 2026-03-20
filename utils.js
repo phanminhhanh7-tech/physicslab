@@ -458,3 +458,192 @@ function updateInfoBar(t, x, y, v) {
   if (ey) ey.textContent = fmt(y, 2) + ' m';
   if (ev) ev.textContent = fmt(v, 2) + ' m/s';
 }
+
+/* ============================================================
+   SHARED ANIMATION UTILITIES
+   Used by ALL simulators for consistent visual quality.
+   ============================================================ */
+
+/**
+ * drawEnvironment — render a consistent background for any sim.
+ * Draws the grid + a subtle vignette in the corners.
+ */
+function drawEnvironment(ctx, W, H) {
+  /* Background */
+  ctx.fillStyle = '#080b12';
+  ctx.fillRect(0, 0, W, H);
+
+  /* Grid */
+  drawGrid(ctx, W, H);
+
+  /* Subtle corner vignette for depth */
+  var vg = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.25)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+/**
+ * drawSurface — draw a glowing horizontal surface line
+ * with a gradient fill below it.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x1, y, x2   - line endpoints
+ * @param {string} color        - e.g. '#00d4ff'
+ * @param {number} fillDepth    - px of gradient below line
+ */
+function drawSurface(ctx, x1, y, x2, color, fillDepth) {
+  fillDepth = fillDepth || 20;
+  ctx.save();
+
+  /* Glow line */
+  ctx.shadowColor = color;
+  ctx.shadowBlur  = 8;
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1, y);
+  ctx.lineTo(x2, y);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  /* Gradient fill */
+  var gf = ctx.createLinearGradient(0, y, 0, y + fillDepth);
+  gf.addColorStop(0, color.replace(')', ',0.10)').replace('rgb', 'rgba'));
+  gf.addColorStop(1, 'rgba(0,0,0,0)');
+  /* Fallback for hex colors */
+  if (color.startsWith('#')) {
+    gf = ctx.createLinearGradient(0, y, 0, y + fillDepth);
+    gf.addColorStop(0, 'rgba(0,212,255,0.10)');
+    gf.addColorStop(1, 'rgba(0,0,0,0)');
+  }
+  ctx.fillStyle = gf;
+  ctx.fillRect(x1, y, x2 - x1, fillDepth);
+
+  ctx.restore();
+}
+
+/**
+ * drawWall — draw a visible wall at a fixed x position.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x        - wall x pixel
+ * @param {number} y1, y2   - top and bottom of wall
+ * @param {string} side     - 'left' | 'right'
+ * @param {string} color
+ */
+function drawWall(ctx, x, y1, y2, side, color) {
+  color = color || 'rgba(0,212,255,0.4)';
+  ctx.save();
+
+  /* Wall line */
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 2;
+  ctx.shadowColor = color;
+  ctx.shadowBlur  = 6;
+  ctx.beginPath();
+  ctx.moveTo(x, y1);
+  ctx.lineTo(x, y2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  /* Hatch marks indicating wall */
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 1;
+  var step = 12;
+  var len  = 8;
+  for (var wy = y1; wy < y2; wy += step) {
+    ctx.beginPath();
+    if (side === 'left') {
+      ctx.moveTo(x, wy);
+      ctx.lineTo(x - len, wy + len);
+    } else {
+      ctx.moveTo(x, wy);
+      ctx.lineTo(x + len, wy + len);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * drawLabel — draw a small text label with a background pill.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {string} text
+ * @param {number} x, y      - centre position
+ * @param {string} color
+ * @param {string} [font]
+ */
+function drawLabel(ctx, text, x, y, color, font) {
+  ctx.save();
+  ctx.font = font || '11px Space Mono, monospace';
+  var tw = ctx.measureText(text).width;
+  var pad = 6;
+  /* Pill background */
+  ctx.fillStyle   = (color || '#00d4ff') + '22';
+  ctx.strokeStyle = (color || '#00d4ff') + '66';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.roundRect(x - tw/2 - pad, y - 10, tw + pad*2, 18, 4);
+  ctx.fill();
+  ctx.stroke();
+  /* Text */
+  ctx.fillStyle   = color || '#00d4ff';
+  ctx.textAlign   = 'center';
+  ctx.fillText(text, x, y + 3);
+  ctx.textAlign   = 'left';
+  ctx.restore();
+}
+
+/**
+ * updateObject — move an object by its velocity for dt seconds.
+ * Works in any coordinate space (physics metres or pixel space).
+ * @param {{ x: number, v: number }} obj - must have x and v
+ * @param {number} dt
+ */
+function updateObject(obj, dt) {
+  obj.x += obj.v * dt;
+}
+
+/**
+ * handleWallCollision — clamp obj.x to [Wmin+r, Wmax-r] and
+ * reverse velocity (with restitution) if moving into wall.
+ * Only reverses once per contact (direction guard prevents jitter).
+ *
+ * @param {{ x: number, v: number }} obj
+ * @param {number} r      - radius in same units as x
+ * @param {number} Wmin   - left wall
+ * @param {number} Wmax   - right wall
+ * @param {number} [restitution=0.8]
+ */
+function handleWallCollision(obj, r, Wmin, Wmax, restitution) {
+  restitution = (restitution === undefined) ? 0.8 : restitution;
+  var VEL_KILL = 0.8; /* px/s below which we zero out */
+
+  /* Left wall */
+  if (obj.x - r < Wmin) {
+    obj.x = Wmin + r;
+    if (obj.v < 0) {
+      obj.v = -obj.v * restitution;
+      if (Math.abs(obj.v) < VEL_KILL) obj.v = 0;
+    }
+  }
+
+  /* Right wall */
+  if (obj.x + r > Wmax) {
+    obj.x = Wmax - r;
+    if (obj.v > 0) {
+      obj.v = -obj.v * restitution;
+      if (Math.abs(obj.v) < VEL_KILL) obj.v = 0;
+    }
+  }
+}
+
+/**
+ * detectCollision — check if two circles overlap.
+ * @param {number} x1, x2   - centres
+ * @param {number} r1, r2   - radii
+ * @returns {boolean}
+ */
+function detectCollision(x1, r1, x2, r2) {
+  return Math.abs(x2 - x1) < (r1 + r2);
+}
