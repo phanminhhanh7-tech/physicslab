@@ -33,16 +33,21 @@
 var proj = {
   x: 0, y: 0,           /* physics position (m)            */
   vx: 0, vy: 0,         /* physics velocity (m/s)          */
-  trail: [],             /* [{x,y}] for trail rendering     */
+  trail: [],             /* [{x,y,age}] trail with age 0-1  */
   done: false,
   data: [],              /* CSV rows                        */
   landedOn: null,        /* 'ground' | 'platform' | null    */
 
+  /* Impact flash — set on landing, counts down each frame */
+  _impactFlash: 0,       /* 0 = none, 1.0 = just landed     */
+  _impactX: 0,           /* canvas px of impact point       */
+  _impactY: 0,
+
   /* Solver / animation params — written by updateProjectile */
   _v0: 30, _theta: 45, _g: 9.81, _m: 1,
   _h0: 0,                /* launch height (m)               */
-  _hLand: 0,             /* landing platform height (m), 0=ground */
-  _landPlatEnabled: false /* whether a landing platform is active */
+  _hLand: 0,             /* landing platform height (m)     */
+  _landPlatEnabled: false
 };
 
 /* ============================================================
@@ -384,6 +389,7 @@ function resetProjectile() {
   proj = {
     x: 0, y: proj._h0, vx: 0, vy: 0,
     trail: [], done: false, data: [], landedOn: null,
+    _impactFlash: 0, _impactX: 0, _impactY: 0,
     _v0: proj._v0, _theta: proj._theta, _g: proj._g,
     _m: proj._m, _h0: proj._h0,
     _hLand: proj._hLand, _landPlatEnabled: proj._landPlatEnabled
@@ -474,6 +480,11 @@ function updateProjectile() {
    STEP — sub-stepped Euler + landing detection
    ============================================================ */
 function stepProjectile(dt) {
+  /* Decay impact flash every frame regardless of done state */
+  if (proj._impactFlash > 0) {
+    proj._impactFlash = Math.max(0, proj._impactFlash - dt * 3);
+  }
+
   if (proj.done) { stopSim(); return; }
 
   var v0    = proj._v0;
@@ -484,22 +495,24 @@ function stepProjectile(dt) {
 
   /* First-frame initialisation */
   if (simTime <= dt + 0.001) {
-    proj.x        = 0;
-    proj.y        = h0;
-    proj.vx       = v0 * Math.cos(theta);
-    proj.vy       = v0 * Math.sin(theta);
-    proj.trail    = [];
-    proj.data     = [];
-    proj.done     = false;
-    proj.landedOn = null;
+    proj.x            = 0;
+    proj.y            = h0;
+    proj.vx           = v0 * Math.cos(theta);
+    proj.vy           = v0 * Math.sin(theta);
+    proj.trail        = [];
+    proj.data         = [];
+    proj.done         = false;
+    proj.landedOn     = null;
+    proj._impactFlash = 0;
 
-    /* Pre-compute the expected landing so the draw can show it */
+    /* Pre-compute expected landing for ghost trajectory + marker */
     proj._landing = _computeLanding(proj.vx, proj.vy, g, h0);
   }
 
-  /* Sub-stepped Euler */
-  var SUBSTEPS = 4;
+  /* Sub-stepped Euler — 8 steps for tight collision accuracy */
+  var SUBSTEPS = 8;
   var dts = dt / SUBSTEPS;
+  var landed = false;
 
   for (var si = 0; si < SUBSTEPS; si++) {
     proj.vy -= g * dts;
@@ -508,35 +521,57 @@ function stepProjectile(dt) {
 
     /* Ground collision */
     if (proj.y <= 0 && simTime > 0.05) {
-      proj.y    = 0;
-      proj.vx   = 0; proj.vy = 0;
-      proj.done = true;
-      proj.landedOn = 'ground';
+      proj.y            = 0;
+      proj.vx           = 0;
+      proj.vy           = 0;
+      proj.done         = true;
+      proj.landedOn     = 'ground';
+      proj._impactFlash = 1.0;
+      landed = true;
       break;
     }
 
-    /* Landing platform collision */
-    if (proj._landPlatEnabled) {
+    /* Landing platform collision — only when descending */
+    if (proj._landPlatEnabled && proj.vy <= 0 && simTime > 0.05) {
       var hL = proj._hLand;
-      /* Only trigger when ball is at or below platform height AND falling */
-      if (proj.y <= hL && proj.vy <= 0 && simTime > 0.05) {
-        /* Check if x is within platform horizontal range */
+      if (proj.y <= hL) {
         var platRange = _landPlatPhysicsRange(proj.vx);
         if (proj.x >= platRange.xMin && proj.x <= platRange.xMax) {
-          proj.y    = hL;
-          proj.vx   = 0; proj.vy = 0;
-          proj.done = true;
-          proj.landedOn = 'platform';
+          proj.y            = hL;
+          proj.vx           = 0;
+          proj.vy           = 0;
+          proj.done         = true;
+          proj.landedOn     = 'platform';
+          proj._impactFlash = 1.0;
+          landed = true;
           break;
         }
       }
     }
   }
 
-  /* Trail */
+  /* Compute impact flash screen position on landing frame */
+  if (landed) {
+    var _W = canvas.width, _H = canvas.height;
+    var _L = PROJ_LAYOUT;
+    var _gY = _H * _L.groundFrac;
+    var _oPx = _L.launchPlatX + _L.launchPlatW / 2;
+    var _v0l = proj._v0, _tl = proj._theta * Math.PI / 180;
+    var _vx0 = _v0l * Math.cos(_tl), _vy0 = _v0l * Math.sin(_tl);
+    var _tG = solveFlightTime(_vy0, g, h0, 0);
+    var _R  = _vx0 * _tG, _aH = h0 + _vy0 * _vy0 / (2 * g);
+    var _sX = _R  > 0 ? (_W - _L.margin * 2) / Math.max(_R, 1) : 8;
+    var _sY = _aH > 0 ? (_gY - _L.margin) / Math.max(_aH, 1) * 0.88 : 8;
+    var _sc = Math.min(_sX, _sY, 80); if (_sc <= 0) _sc = 8;
+    proj._impactX = _oPx + proj.x * _sc;
+    proj._impactY = _gY  - proj.y * _sc;
+  }
+
+  /* Trail — store position with an age counter for fade */
   var trailEl = document.getElementById('proj-trail');
   if (trailEl && trailEl.checked) {
     proj.trail.push({ x: proj.x, y: proj.y });
+    /* Age existing points: oldest ones will be first in array */
     if (proj.trail.length > 800) proj.trail.shift();
   }
 
@@ -656,22 +691,58 @@ function drawPlatforms(ctx, groundY, W, H) {
 
 function _drawPlatBar(ctx, x, groundY, w, h, color, physH) {
   ctx.save();
-  ctx.shadowColor = color + '88'; ctx.shadowBlur = 10;
+
+  /* Drop shadow */
+  ctx.shadowColor = color; ctx.shadowBlur = 14;
+
+  /* Main platform bar — gradient top-to-bottom */
   var grad = ctx.createLinearGradient(x, groundY - h, x, groundY);
-  grad.addColorStop(0, color + 'dd');
-  grad.addColorStop(1, color + '55');
+  grad.addColorStop(0, color + 'ee');
+  grad.addColorStop(0.4, color + 'bb');
+  grad.addColorStop(1, color + '44');
   ctx.fillStyle = grad;
   ctx.fillRect(x, groundY - h, w, h);
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = color; ctx.lineWidth = 1.5;
-  ctx.strokeRect(x, groundY - h, w, h);
+
+  /* Top edge bright line for 3-D ledge look */
+  ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, groundY - h);
+  ctx.lineTo(x + w, groundY - h);
+  ctx.stroke();
+
+  /* Side and bottom border */
+  ctx.strokeStyle = color + '66'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, groundY - h);
+  ctx.lineTo(x, groundY);
+  ctx.lineTo(x + w, groundY);
+  ctx.lineTo(x + w, groundY - h);
+  ctx.stroke();
+
+  /* Diagonal hatch pattern on face */
+  ctx.strokeStyle = color + '22'; ctx.lineWidth = 1;
+  for (var hx = x; hx < x + w + h; hx += 8) {
+    ctx.beginPath();
+    ctx.moveTo(Math.max(x, hx - h), groundY - h);
+    ctx.lineTo(Math.min(x + w, hx),  groundY);
+    ctx.stroke();
+  }
 
   /* Height label above platform */
   if (physH > 0) {
-    ctx.fillStyle = color;
     ctx.font = 'bold 10px Space Mono, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(fmtSci(physH) + ' m', x + w / 2, groundY - h - 6);
+    var lbl = fmtSci(physH) + ' m';
+    var tw  = ctx.measureText(lbl).width;
+    /* Label pill */
+    ctx.fillStyle = color + '22';
+    ctx.strokeStyle = color + '66'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x + w/2 - tw/2 - 5, groundY - h - 20, tw + 10, 16, 3);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fillText(lbl, x + w / 2, groundY - h - 8);
     ctx.textAlign = 'left';
   }
   ctx.restore();
@@ -728,6 +799,112 @@ function drawHeightIndicator(ctx, platX, platW, groundY, physH) {
 }
 
 /* ============================================================
+   DRAW HELPERS — impact ring, shadow, faded trail
+   ============================================================ */
+
+/** Draw a fading impact ring at landing point */
+function _drawImpactFlash(ctx, px, py, flash, color) {
+  if (flash <= 0) return;
+  ctx.save();
+  /* Expanding ring */
+  var radius = (1 - flash) * 40 + 8;
+  var alpha  = flash * 0.8;
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth   = 2.5;
+  ctx.shadowColor = color; ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.arc(px, py, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  /* Inner dot */
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.fillStyle   = color;
+  ctx.beginPath();
+  ctx.arc(px, py, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+/** Draw a subtle shadow ellipse under the ball while in flight */
+function _drawBallShadow(ctx, bxPx, groundY, ballR, heightFrac) {
+  /* Shadow shrinks and fades as ball rises */
+  var alpha  = 0.18 * (1 - heightFrac * 0.7);
+  var scaleW = 1 + heightFrac * 0.4;
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle   = 'rgba(0,0,0,0.6)';
+  ctx.beginPath();
+  ctx.ellipse(bxPx, groundY - 2, ballR * scaleW, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+/** Draw a fading trail — newer points brighter, older ones faded */
+function _drawTrail(ctx, trail, wx, wy) {
+  if (trail.length < 2) return;
+  ctx.save();
+  /* Draw segments with varying opacity based on age */
+  for (var ti = 1; ti < trail.length; ti++) {
+    var age   = ti / trail.length;       /* 0 = oldest, 1 = newest */
+    var alpha = age * age * 0.75;        /* quadratic fade */
+    var width = 1 + age * 2;            /* thinner at tail */
+    if (alpha < 0.02) continue;
+    var p0 = trail[ti - 1], p1 = trail[ti];
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#00d4ff';
+    ctx.lineWidth   = width;
+    ctx.beginPath();
+    ctx.moveTo(wx(p0.x), wy(p0.y));
+    ctx.lineTo(wx(p1.x), wy(p1.y));
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+/** Draw a glowing projectile ball with motion blur suggestion */
+function _drawBall(ctx, bxPx, byPx, ballR, vx, vy, speed) {
+  ctx.save();
+
+  /* Outer glow — size scales with speed */
+  var glowR = ballR + Math.min(speed * 0.15, 10);
+  ctx.shadowColor = '#00d4ff';
+  ctx.shadowBlur  = 18 + Math.min(speed * 0.1, 12);
+
+  /* Gradient fill */
+  var grad = ctx.createRadialGradient(
+    bxPx - ballR * 0.3, byPx - ballR * 0.3, 0,
+    bxPx, byPx, glowR
+  );
+  grad.addColorStop(0,   '#ffffff');
+  grad.addColorStop(0.2, '#a0efff');
+  grad.addColorStop(0.6, '#00d4ff');
+  grad.addColorStop(1,   '#00d4ff00');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(bxPx, byPx, glowR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  /* Core solid ball */
+  ctx.fillStyle = '#00d4ff';
+  ctx.beginPath();
+  ctx.arc(bxPx, byPx, ballR, 0, Math.PI * 2);
+  ctx.fill();
+
+  /* Specular highlight */
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath();
+  ctx.arc(bxPx - ballR * 0.3, byPx - ballR * 0.3, ballR * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/* ============================================================
    MAIN DRAW
    ============================================================ */
 function drawProjectile() {
@@ -769,20 +946,32 @@ function drawProjectile() {
   function wx(x) { return originPx + x * scale; }
   function wy(y) { return groundY  - y * scale; }
 
-  /* ---- Ground line ---- */
-  ctx.strokeStyle = 'rgba(0,212,255,0.35)';
+  /* ---- Ground line — textured ---- */
+  /* Ground fill */
+  var gfGrad = ctx.createLinearGradient(0, groundY, 0, groundY + 28);
+  gfGrad.addColorStop(0,   'rgba(0,212,255,0.12)');
+  gfGrad.addColorStop(0.4, 'rgba(0,212,255,0.04)');
+  gfGrad.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = gfGrad;
+  ctx.fillRect(margin, groundY, trackW, 28);
+
+  /* Ground line with glow */
+  ctx.save();
+  ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 6;
+  ctx.strokeStyle = 'rgba(0,212,255,0.5)';
   ctx.lineWidth   = 2;
   ctx.beginPath();
   ctx.moveTo(margin, groundY);
   ctx.lineTo(W - margin, groundY);
   ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.restore();
 
-  /* Subtle ground fill */
-  var gf = ctx.createLinearGradient(0, groundY, 0, groundY + 16);
-  gf.addColorStop(0, 'rgba(0,212,255,0.07)');
-  gf.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = gf;
-  ctx.fillRect(margin, groundY, trackW, 16);
+  /* Subtle tick marks on ground */
+  ctx.strokeStyle = 'rgba(0,212,255,0.15)'; ctx.lineWidth = 1;
+  for (var tx = margin; tx <= W - margin; tx += 40) {
+    ctx.beginPath(); ctx.moveTo(tx, groundY); ctx.lineTo(tx, groundY + 5); ctx.stroke();
+  }
 
   /* ---- Platforms (FIXED positions) ---- */
   drawPlatforms(ctx, groundY, W, H);
@@ -798,49 +987,45 @@ function drawProjectile() {
   var T_end     = landing ? landing.t : T_toGround;
   var endY      = landing ? landing.y : 0;
 
-  ctx.strokeStyle = 'rgba(0,212,255,0.2)';
+  /* ---- Ghost trajectory — dashed arc ---- */
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,212,255,0.18)';
   ctx.lineWidth   = 1.5;
-  ctx.setLineDash([6, 5]);
+  ctx.setLineDash([7, 6]);
   ctx.beginPath();
-  var STEPS = 120;
-  var firstPt = true;
-  for (var i = 0; i <= STEPS; i++) {
-    var t  = T_end * i / STEPS;
-    var gx = vx0 * t;
-    var gy = h0 + vy0 * t - 0.5 * g * t * t;
-    /* Clamp to the landing surface */
-    if (gy < endY - 0.001) break;
-    if (firstPt) { ctx.moveTo(wx(gx), wy(gy)); firstPt = false; }
-    else          ctx.lineTo(wx(gx), wy(gy));
+  var GHOST_STEPS = 160;
+  var ghostFirst  = true;
+  for (var gi = 0; gi <= GHOST_STEPS; gi++) {
+    var gt  = T_end * gi / GHOST_STEPS;
+    var ggx = vx0 * gt;
+    var ggy = h0 + vy0 * gt - 0.5 * g * gt * gt;
+    if (ggy < endY - 0.001) break;
+    if (ghostFirst) { ctx.moveTo(wx(ggx), wy(ggy)); ghostFirst = false; }
+    else             ctx.lineTo(wx(ggx), wy(ggy));
   }
   ctx.stroke();
   ctx.setLineDash([]);
+  ctx.restore();
 
-  /* ---- Actual trail ---- */
-  if (proj.trail.length > 1) {
-    ctx.beginPath();
-    for (var ti = 0; ti < proj.trail.length; ti++) {
-      var p = proj.trail[ti];
-      if (ti === 0) ctx.moveTo(wx(p.x), wy(p.y));
-      else          ctx.lineTo(wx(p.x), wy(p.y));
-    }
-    ctx.strokeStyle = 'rgba(0,212,255,0.7)';
-    ctx.lineWidth   = 2;
-    ctx.stroke();
-  }
+  /* ---- Fading trail ---- */
+  _drawTrail(ctx, proj.trail, wx, wy);
 
-  /* ---- Landing marker ---- */
+  /* ---- Landing marker (predicted) ---- */
   if (landing) {
     var lmx = wx(landing.x), lmy = wy(landing.y);
+    var lCol = (landing.surface === 'platform') ? '#ff6b35' : '#00d4ff';
     ctx.save();
-    ctx.strokeStyle = (landing.surface === 'platform') ? '#ff6b35' : '#00d4ff';
-    ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(lmx, lmy - 10); ctx.lineTo(lmx, lmy + 10); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(lmx - 10, lmy); ctx.lineTo(lmx + 10, lmy); ctx.stroke();
+    /* Crosshair */
+    ctx.strokeStyle = lCol + '88'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(lmx, lmy - 12); ctx.lineTo(lmx, lmy + 12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lmx - 12, lmy); ctx.lineTo(lmx + 12, lmy); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = (landing.surface === 'platform') ? '#ff6b35' : '#00d4ff';
-    ctx.font = '10px Space Mono'; ctx.textAlign = 'center';
-    ctx.fillText((landing.surface === 'platform' ? '🎯 ' : '📍 ') + 'x=' + fmtSci(landing.x) + 'm', lmx, lmy - 14);
+    /* Circle */
+    ctx.strokeStyle = lCol + 'aa'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(lmx, lmy, 8, 0, Math.PI * 2); ctx.stroke();
+    /* Label */
+    ctx.fillStyle = lCol; ctx.font = '10px Space Mono'; ctx.textAlign = 'center';
+    ctx.fillText('x=' + fmtSci(landing.x) + 'm', lmx, lmy - 16);
     ctx.textAlign = 'left';
     ctx.restore();
   }
@@ -848,17 +1033,37 @@ function drawProjectile() {
   /* ---- Ball position ---- */
   var bxPx, byPx;
   var platTopY = groundY - L.launchPlatH;
+  var speed    = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
+
   if (!simRunning && simTime === 0) {
     /* Idle: rest on launch platform */
     bxPx = originPx;
     byPx = platTopY - L.ballR;
+    speed = 0;
   } else {
     bxPx = wx(proj.x);
     byPx = wy(proj.y);
-    /* Never go visually below ground */
-    if (byPx > groundY - L.ballR) byPx = groundY - L.ballR;
+    /* Never go visually below the landing surface */
+    var landSurfY = proj.landedOn === 'platform' ? wy(proj._hLand) : groundY;
+    if (byPx > landSurfY - L.ballR) byPx = landSurfY - L.ballR;
   }
-  drawGlowCircle(ctx, bxPx, byPx, L.ballR, '#00d4ff');
+
+  /* Shadow on ground (only when airborne) */
+  if (simRunning && !proj.done) {
+    var heightAboveGround = proj.y;                 /* metres above ground */
+    var maxH = Math.max(apexH, 1);
+    var hFrac = Math.min(heightAboveGround / maxH, 1);
+    _drawBallShadow(ctx, bxPx, groundY, L.ballR, hFrac);
+  }
+
+  /* Polished ball */
+  _drawBall(ctx, bxPx, byPx, L.ballR, proj.vx, proj.vy, speed);
+
+  /* Impact flash */
+  if (proj._impactFlash > 0) {
+    var flashCol = proj.landedOn === 'platform' ? '#ff6b35' : '#00d4ff';
+    _drawImpactFlash(ctx, proj._impactX, proj._impactY, proj._impactFlash, flashCol);
+  }
 
   /* ---- Velocity vectors ---- */
   var vecEl = document.getElementById('proj-vectors');
@@ -905,13 +1110,30 @@ function drawProjectile() {
     ctx.fillText(modeText, margin + 4, groundY - L.launchPlatH - 18);
   }
 
-  /* ---- Landed indicator ---- */
+  /* ---- Landed indicator banner ---- */
   if (proj.done && proj.landedOn) {
-    var lstr = proj.landedOn === 'platform' ? '🎯 Landed on platform!' : '📍 Landed on ground!';
-    ctx.fillStyle = proj.landedOn === 'platform' ? '#ff6b35' : '#00d4ff';
-    ctx.font = 'bold 12px DM Sans'; ctx.textAlign = 'center';
-    ctx.fillText(lstr, W / 2, groundY - 30);
+    var banCol  = proj.landedOn === 'platform' ? '#ff6b35' : '#00d4ff';
+    var banText = proj.landedOn === 'platform'
+      ? 'Landed on platform  •  x = ' + fmtSci(proj.x) + ' m'
+      : 'Landed on ground  •  x = ' + fmtSci(proj.x) + ' m';
+    ctx.save();
+    ctx.font = 'bold 12px DM Sans, sans-serif';
+    var btw = ctx.measureText(banText).width;
+    var bx2 = W / 2 - btw / 2 - 14, by2 = groundY - 46;
+    /* Pill background */
+    ctx.fillStyle   = banCol + '22';
+    ctx.strokeStyle = banCol + '88'; ctx.lineWidth = 1.5;
+    ctx.shadowColor = banCol; ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.roundRect(bx2, by2, btw + 28, 26, 6);
+    ctx.fill(); ctx.stroke();
+    ctx.shadowBlur = 0;
+    /* Text */
+    ctx.fillStyle = banCol;
+    ctx.textAlign = 'center';
+    ctx.fillText(banText, W / 2, by2 + 17);
     ctx.textAlign = 'left';
+    ctx.restore();
   }
 }
 
