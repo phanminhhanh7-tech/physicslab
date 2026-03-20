@@ -566,7 +566,14 @@ function stepProjectile(dt) {
     var _sY = _aH > 0 ? (_gY - _L.margin) / Math.max(_aH, 1) * 0.88 : 8;
     var _sc = Math.min(_sX, _sY, 80); if (_sc <= 0) _sc = 8;
     proj._impactX = _oPx + proj.x * _sc;
-    proj._impactY = _gY  - proj.y * _sc;
+    /* For platform landings, clamp impact Y to the visible platform surface */
+    var _rawImpactY = _gY - proj.y * _sc;
+    if (proj.landedOn === 'platform') {
+      var _rawPlatTopY = _gY - proj._hLand * _sc;
+      var _clampedPlatTopY = Math.max(_L.margin + 20, Math.min(_gY - 6, _rawPlatTopY));
+      _rawImpactY = _clampedPlatTopY;
+    }
+    proj._impactY = _rawImpactY;
   }
 
   /* Trail — store position with an age counter for fade */
@@ -699,7 +706,8 @@ function drawPlatforms(ctx, groundY, W, H, scale, originPx) {
   /* --- Launch platform (left edge fixed at margin) --- */
   _drawPlatBar(ctx, L.launchPlatX, groundY, L.launchPlatW, L.launchPlatH, '#a8ff3e', proj._h0);
 
-  /* --- Landing platform — centred at PREDICTED landing x ---- */
+  /* --- Landing platform — centred at PREDICTED landing x,
+         top surface drawn at hLand height above ground ---- */
   if (proj._landPlatEnabled) {
     var v0   = proj._v0;
     var th   = proj._theta * Math.PI / 180;
@@ -709,70 +717,87 @@ function drawPlatforms(ctx, groundY, W, H, scale, originPx) {
     var vx0  = v0 * Math.cos(th);
     var vy0  = v0 * Math.sin(th);
 
-    /* Time at which ball descends to hLand */
+    /* Predicted landing x in physics metres */
     var tLand = solveLandingTime(vy0, g, h0, hL);
     if (!tLand || tLand <= 0) tLand = solveFlightTime(vy0, g, h0, 0);
     var xLand = vx0 * tLand;
 
-    /* Convert physics x → canvas pixel, centred */
+    /* Canvas pixel centre of platform */
     var platCentrePx = originPx + xLand * scale;
     var platLeftPx   = platCentrePx - L.landPlatW / 2;
 
-    /* Highlight the platform when ball has landed on it */
+    /* Clamp platform left edge so it stays within canvas bounds */
+    var maxLeft = W - L.margin - L.landPlatW;
+    var minLeft = L.margin;
+    platLeftPx  = Math.max(minLeft, Math.min(maxLeft, platLeftPx));
+
+    /* Platform visual height:
+       The TOP surface sits at hLand metres above ground → convert
+       to pixels using the same scale as the trajectory.
+       Clamp the top surface so it stays within usable canvas area. */
+    var platTopY = groundY - hL * scale;
+    var minPlatTopY = L.margin + 20;      /* never above top margin */
+    var maxPlatTopY = groundY - 6;        /* always at least 6px above ground */
+    platTopY = Math.max(minPlatTopY, Math.min(maxPlatTopY, platTopY));
+
+    /* Platform physical pixel height — min 8px, max 60px so it's
+       always visible and never dominates the canvas */
+    var platVisH = Math.max(8, Math.min(60, L.landPlatH + hL * scale * 0.04));
+
+    /* Highlight when landed */
     var color = (proj.done && proj.landedOn === 'platform') ? '#ffaa00' : '#ff6b35';
 
-    _drawPlatBar(ctx, platLeftPx, groundY, L.landPlatW, L.landPlatH, color, hL);
+    _drawPlatBarAt(ctx, platLeftPx, platTopY, L.landPlatW, platVisH, color, hL);
   }
 }
 
-function _drawPlatBar(ctx, x, groundY, w, h, color, physH) {
-  ctx.save();
-
+/* Shared platform bar renderer — draws bar with top at topY */
+function _platBarCore(ctx, x, topY, w, visH, color) {
   /* Drop shadow */
   ctx.shadowColor = color; ctx.shadowBlur = 14;
 
-  /* Main platform bar — gradient top-to-bottom */
-  var grad = ctx.createLinearGradient(x, groundY - h, x, groundY);
-  grad.addColorStop(0, color + 'ee');
+  /* Main bar gradient */
+  var grad = ctx.createLinearGradient(x, topY, x, topY + visH);
+  grad.addColorStop(0,   color + 'ee');
   grad.addColorStop(0.4, color + 'bb');
-  grad.addColorStop(1, color + '44');
+  grad.addColorStop(1,   color + '44');
   ctx.fillStyle = grad;
-  ctx.fillRect(x, groundY - h, w, h);
+  ctx.fillRect(x, topY, w, visH);
   ctx.shadowBlur = 0;
 
-  /* Top edge bright line for 3-D ledge look */
+  /* Bright top edge */
   ctx.strokeStyle = color; ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x, groundY - h);
-  ctx.lineTo(x + w, groundY - h);
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, topY); ctx.lineTo(x + w, topY); ctx.stroke();
 
-  /* Side and bottom border */
+  /* Side/bottom border */
   ctx.strokeStyle = color + '66'; ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(x, groundY - h);
-  ctx.lineTo(x, groundY);
-  ctx.lineTo(x + w, groundY);
-  ctx.lineTo(x + w, groundY - h);
+  ctx.moveTo(x, topY); ctx.lineTo(x, topY + visH);
+  ctx.lineTo(x + w, topY + visH); ctx.lineTo(x + w, topY);
   ctx.stroke();
 
-  /* Diagonal hatch pattern on face */
+  /* Hatch */
   ctx.strokeStyle = color + '22'; ctx.lineWidth = 1;
-  for (var hx = x; hx < x + w + h; hx += 8) {
+  for (var hx = x; hx < x + w + visH; hx += 8) {
     ctx.beginPath();
-    ctx.moveTo(Math.max(x, hx - h), groundY - h);
-    ctx.lineTo(Math.min(x + w, hx),  groundY);
+    ctx.moveTo(Math.max(x, hx - visH), topY);
+    ctx.lineTo(Math.min(x + w, hx),    topY + visH);
     ctx.stroke();
   }
+}
 
-  /* Height label above platform */
+/* Launch platform — sits ON the ground line */
+function _drawPlatBar(ctx, x, groundY, w, h, color, physH) {
+  ctx.save();
+  _platBarCore(ctx, x, groundY - h, w, h, color);
+
+  /* Height label (only for launch platform when h0 > 0) */
   if (physH > 0) {
     ctx.font = 'bold 10px Space Mono, monospace';
     ctx.textAlign = 'center';
     var lbl = fmtSci(physH) + ' m';
     var tw  = ctx.measureText(lbl).width;
-    /* Label pill */
-    ctx.fillStyle = color + '22';
+    ctx.fillStyle   = color + '22';
     ctx.strokeStyle = color + '66'; ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect(x + w/2 - tw/2 - 5, groundY - h - 20, tw + 10, 16, 3);
@@ -781,6 +806,27 @@ function _drawPlatBar(ctx, x, groundY, w, h, color, physH) {
     ctx.fillText(lbl, x + w / 2, groundY - h - 8);
     ctx.textAlign = 'left';
   }
+  ctx.restore();
+}
+
+/* Landing platform — top surface at arbitrary canvas y (topY) */
+function _drawPlatBarAt(ctx, x, topY, w, visH, color, physH) {
+  ctx.save();
+  _platBarCore(ctx, x, topY, w, visH, color);
+
+  /* Height label above platform top */
+  ctx.font = 'bold 10px Space Mono, monospace';
+  ctx.textAlign = 'center';
+  var lbl = fmtSci(physH) + ' m';
+  var tw  = ctx.measureText(lbl).width;
+  ctx.fillStyle   = color + '22';
+  ctx.strokeStyle = color + '88'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(x + w/2 - tw/2 - 5, topY - 20, tw + 10, 16, 3);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.fillText(lbl, x + w/2, topY - 8);
+  ctx.textAlign = 'left';
   ctx.restore();
 }
 
@@ -1071,6 +1117,17 @@ function drawProjectile() {
   var platTopY = groundY - L.launchPlatH;
   var speed    = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
 
+  /* Compute landing platform's clamped canvas top-Y,
+     matching exactly what drawPlatforms draws */
+  var landPlatTopY = groundY;  /* default = ground */
+  if (proj._landPlatEnabled) {
+    var _hL    = proj._hLand;
+    var _rawTopY = groundY - _hL * scale;
+    var _minTop  = L.margin + 20;
+    var _maxTop  = groundY - 6;
+    landPlatTopY = Math.max(_minTop, Math.min(_maxTop, _rawTopY));
+  }
+
   if (!simRunning && simTime === 0) {
     /* Idle: rest on launch platform */
     bxPx = originPx;
@@ -1079,8 +1136,8 @@ function drawProjectile() {
   } else {
     bxPx = wx(proj.x);
     byPx = wy(proj.y);
-    /* Never go visually below the landing surface */
-    var landSurfY = proj.landedOn === 'platform' ? wy(proj._hLand) : groundY;
+    /* Clamp ball so it never goes visually below its landing surface */
+    var landSurfY = proj.landedOn === 'platform' ? landPlatTopY : groundY;
     if (byPx > landSurfY - L.ballR) byPx = landSurfY - L.ballR;
   }
 
