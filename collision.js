@@ -890,7 +890,7 @@ function updateCollision() {
     col.b1 = { x: _margin + 0.12 * _trackW, vPx: col._v1i * PX_PER_MS };
     col.b2 = { x: _margin + 0.78 * _trackW, vPx: col._v2i * PX_PER_MS };
     col.phase = 'pre'; col.collided = false;
-    drawCollision();
+    if (currentSim === 'collision') drawCollision();
   }
 }
 
