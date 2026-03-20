@@ -533,10 +533,12 @@ function stepProjectile(dt) {
 
     /* Landing platform collision — only when descending */
     if (proj._landPlatEnabled && proj.vy <= 0 && simTime > 0.05) {
-      var hL = proj._hLand;
+      var hL       = proj._hLand;
+      /* Use >= to catch the exact-height case and overshoot */
       if (proj.y <= hL) {
-        var platRange = _landPlatPhysicsRange(proj.vx);
+        var platRange = _landPlatPhysicsRange();  /* centred at predicted x */
         if (proj.x >= platRange.xMin && proj.x <= platRange.xMax) {
+          /* Snap exactly to platform surface — no offset, no bounce */
           proj.y            = hL;
           proj.vx           = 0;
           proj.vy           = 0;
@@ -544,7 +546,7 @@ function stepProjectile(dt) {
           proj.landedOn     = 'platform';
           proj._impactFlash = 1.0;
           landed = true;
-          break;
+          break;  /* exit substep loop immediately — no further integration */
         }
       }
     }
@@ -604,8 +606,8 @@ function stepProjectile(dt) {
  * current proj params, used to show the landing marker at rest.
  */
 function _computeLanding(vx, vy, g, h0) {
-  /* Landing platform physics x-range */
-  var platRange = _landPlatPhysicsRange(vx);
+  /* Landing platform physics x-range — centred at predicted landing x */
+  var platRange = _landPlatPhysicsRange();
 
   return detectLanding(
     vx, vy, g, h0,
@@ -618,25 +620,16 @@ function _computeLanding(vx, vy, g, h0) {
 
 /**
  * _landPlatPhysicsRange
- * Returns the physics x-range (metres) that corresponds to the
- * FIXED visual landing platform position.
+ * Returns the physics x-range (metres) for the landing platform.
  *
- * This is the KEY decoupling: we convert FIXED pixel positions
- * back to physics metres using the current scale, so physics
- * landing check matches what the user sees.
+ * The platform is centred at the PREDICTED landing x — the x
+ * position where the ball will reach hLand height (descending).
+ * Half of landPlatW (converted to metres) extends each side.
  *
- * @param {number} vx - horizontal velocity (used to derive scale)
+ * This is recomputed from physics every call so it always matches
+ * wherever the ball will actually land, regardless of canvas size.
  */
-function _landPlatPhysicsRange(vx) {
-  /* We use the drawing scale used in drawProjectile.
-     Since scale depends on trajectory, we compute it here too. */
-  var W = canvas.width, H = canvas.height;
-  var L = PROJ_LAYOUT;
-  var margin   = L.margin;
-  var groundY  = H * L.groundFrac;
-  var trackW   = W - margin * 2;
-  var originPx = L.launchPlatX + L.launchPlatW / 2;
-
+function _landPlatPhysicsRange() {
   var v0    = proj._v0;
   var theta = proj._theta * Math.PI / 180;
   var g     = proj._g;
@@ -645,23 +638,48 @@ function _landPlatPhysicsRange(vx) {
   var vx0   = v0 * Math.cos(theta);
   var vy0   = v0 * Math.sin(theta);
 
-  var T      = solveFlightTime(vy0, g, h0, 0); /* time to ground */
-  var R      = vx0 * T;
-  var apexH  = h0 + vy0 * vy0 / (2 * g);
+  /* Predicted landing time and x at hLand height */
+  var tLand  = solveLandingTime(vy0, g, h0, hL);
+  if (!tLand || tLand <= 0) {
+    /* Fallback: use ground landing */
+    tLand = solveFlightTime(vy0, g, h0, 0);
+  }
+  var xLand = vx0 * tLand;
 
-  var scaleX = R > 0     ? (W - margin * 2) / Math.max(R, 1) : 8;
-  var scaleY = apexH > 0 ? (groundY - margin) / Math.max(apexH, 1) * 0.88 : 8;
+  /* Convert half-platform-width from pixels to physics metres.
+     Use the same scale formula as drawProjectile so they match. */
+  var halfWidthMetres = _platHalfWidthMetres(vx0, vy0, g, h0);
+
+  return {
+    xMin:   xLand - halfWidthMetres,
+    xMax:   xLand + halfWidthMetres,
+    xCentre: xLand           /* expose centre for drawPlatforms */
+  };
+}
+
+/**
+ * _platHalfWidthMetres
+ * Converts PROJ_LAYOUT.landPlatW / 2 pixels into physics metres
+ * using the current draw scale.  Called by both the physics range
+ * helper and the draw function so they always agree.
+ */
+function _platHalfWidthMetres(vx0, vy0, g, h0) {
+  var W = canvas.width, H = canvas.height;
+  var L = PROJ_LAYOUT;
+  var margin  = L.margin;
+  var groundY = H * L.groundFrac;
+  var trackW  = W - margin * 2;
+
+  var T_ground = solveFlightTime(vy0, g, h0, 0);
+  var R_ground = vx0 * T_ground;
+  var apexH    = h0 + vy0 * vy0 / (2 * g);
+
+  var scaleX = R_ground > 0 ? trackW / Math.max(R_ground, 1) : 8;
+  var scaleY = apexH    > 0 ? (groundY - margin) / Math.max(apexH, 1) * 0.88 : 8;
   var scale  = Math.min(scaleX, scaleY, 80);
   if (scale <= 0) scale = 8;
 
-  /* Fixed pixel position of landing platform → physics metres */
-  var platPixLeft  = originPx + trackW * L.landPlatXFrac;
-  var platPixRight = platPixLeft + L.landPlatW;
-
-  return {
-    xMin: (platPixLeft  - originPx) / scale,
-    xMax: (platPixRight - originPx) / scale
-  };
+  return (L.landPlatW / 2) / scale;
 }
 
 /* ============================================================
@@ -675,17 +693,35 @@ function _landPlatPhysicsRange(vx) {
  * @param {number} groundY  - fixed canvas y for ground
  * @param {number} W, H     - canvas dimensions
  */
-function drawPlatforms(ctx, groundY, W, H) {
+function drawPlatforms(ctx, groundY, W, H, scale, originPx) {
   var L = PROJ_LAYOUT;
 
-  /* --- Launch platform (left, fixed) --- */
+  /* --- Launch platform (left edge fixed at margin) --- */
   _drawPlatBar(ctx, L.launchPlatX, groundY, L.launchPlatW, L.launchPlatH, '#a8ff3e', proj._h0);
 
-  /* --- Landing platform (right, fixed) — only when enabled --- */
+  /* --- Landing platform — centred at PREDICTED landing x ---- */
   if (proj._landPlatEnabled) {
-    var trackW  = W - L.margin * 2;
-    var platX   = L.launchPlatX + L.launchPlatW / 2 + trackW * L.landPlatXFrac;
-    _drawPlatBar(ctx, platX, groundY, L.landPlatW, L.landPlatH, '#ff6b35', proj._hLand);
+    var v0   = proj._v0;
+    var th   = proj._theta * Math.PI / 180;
+    var g    = proj._g;
+    var h0   = proj._h0;
+    var hL   = proj._hLand;
+    var vx0  = v0 * Math.cos(th);
+    var vy0  = v0 * Math.sin(th);
+
+    /* Time at which ball descends to hLand */
+    var tLand = solveLandingTime(vy0, g, h0, hL);
+    if (!tLand || tLand <= 0) tLand = solveFlightTime(vy0, g, h0, 0);
+    var xLand = vx0 * tLand;
+
+    /* Convert physics x → canvas pixel, centred */
+    var platCentrePx = originPx + xLand * scale;
+    var platLeftPx   = platCentrePx - L.landPlatW / 2;
+
+    /* Highlight the platform when ball has landed on it */
+    var color = (proj.done && proj.landedOn === 'platform') ? '#ffaa00' : '#ff6b35';
+
+    _drawPlatBar(ctx, platLeftPx, groundY, L.landPlatW, L.landPlatH, color, hL);
   }
 }
 
@@ -973,15 +1009,15 @@ function drawProjectile() {
     ctx.beginPath(); ctx.moveTo(tx, groundY); ctx.lineTo(tx, groundY + 5); ctx.stroke();
   }
 
-  /* ---- Platforms (FIXED positions) ---- */
-  drawPlatforms(ctx, groundY, W, H);
+  /* ---- Platforms — launch platform fixed, landing platform at predicted x ---- */
+  drawPlatforms(ctx, groundY, W, H, scale, originPx);
 
   /* ---- Height indicator ---- */
   drawHeightIndicator(ctx, L.launchPlatX, L.launchPlatW, groundY, h0);
 
   /* ---- Ghost trajectory ---- */
-  /* Compute actual landing for trajectory end */
-  var platRange = _landPlatPhysicsRange(vx0);
+  /* Compute actual landing using physics-predicted platform centre */
+  var platRange = _landPlatPhysicsRange();
   var landing   = detectLanding(vx0, vy0, g, h0, hLand,
                                 proj._landPlatEnabled, platRange.xMin, platRange.xMax);
   var T_end     = landing ? landing.t : T_toGround;
