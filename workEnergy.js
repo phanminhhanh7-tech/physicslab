@@ -444,7 +444,7 @@ function updateWork() {
     g:     state.g     || 9.81
   };
 
-  if (!simRunning) drawWork();
+  if (!simRunning && currentSim === 'work')       drawWork();
 }
 
 function _wrkBar(barId, lblId, val, maxE) {
@@ -536,9 +536,7 @@ function stepWork(dt) {
    ------------------------------------------------------------ */
 function drawWork() {
   var W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#080b12'; ctx.fillRect(0, 0, W, H);
-  drawGrid(ctx, W, H);
+  drawEnvironment(ctx, W, H);
 
   var c = wrk._computed || {};
   var m = c.m || 10, F = c.F || 0;
@@ -550,100 +548,138 @@ function drawWork() {
   var margin = 80;
   var trackW = W - margin * 2;
 
-  /* Surface */
-  var surfGrad = ctx.createLinearGradient(0, surfY, 0, surfY + 12);
-  surfGrad.addColorStop(0, 'rgba(0,212,255,0.5)');
-  surfGrad.addColorStop(1, 'rgba(0,212,255,0.1)');
-  ctx.fillStyle = surfGrad; ctx.fillRect(margin, surfY, trackW, 12);
+  /* ---- Track walls ---- */
+  drawWall(ctx, margin,         surfY - 60, surfY, 'left',  'rgba(0,212,255,0.3)');
+  drawWall(ctx, margin + trackW, surfY - 60, surfY, 'right', 'rgba(0,212,255,0.3)');
 
-  /* Friction overlay */
+  /* ---- Surface (using shared helper) ---- */
+  drawSurface(ctx, margin, surfY, margin + trackW, '#00d4ff', 14);
+
+  /* Friction texture overlay */
   if (mu > 0) {
-    ctx.fillStyle = 'rgba(255,107,53,' + Math.min(mu * 0.3, 0.5) + ')';
+    /* Hatched friction texture */
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,107,53,' + Math.min(mu * 0.35, 0.55) + ')';
+    ctx.lineWidth = 1;
+    for (var fx = margin; fx < margin + trackW; fx += 10) {
+      ctx.beginPath(); ctx.moveTo(fx, surfY); ctx.lineTo(fx + 8, surfY + 10); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,107,53,0.12)';
     ctx.fillRect(margin, surfY, trackW, 12);
-    ctx.fillStyle = '#ff6b35'; ctx.font = '11px Space Mono, monospace';
-    ctx.fillText('μ = ' + mu, margin + 8, surfY + 26);
+    ctx.restore();
+    drawLabel(ctx, 'μ = ' + mu, margin + 50, surfY + 24, '#ff6b35', '10px Space Mono');
   }
 
-  /* Distance markers */
-  ctx.strokeStyle = 'rgba(107,122,153,0.3)'; ctx.lineWidth = 1;
-  ctx.fillStyle   = 'rgba(107,122,153,0.6)'; ctx.font = '10px Space Mono';
+  /* ---- Distance markers ---- */
+  ctx.save();
+  ctx.strokeStyle = 'rgba(107,122,153,0.25)'; ctx.lineWidth = 1;
+  ctx.fillStyle   = 'rgba(107,122,153,0.55)'; ctx.font = '10px Space Mono';
   ctx.textAlign   = 'center';
   for (var i = 0; i <= 10; i++) {
     var mx = margin + trackW * i / 10;
-    ctx.beginPath(); ctx.moveTo(mx, surfY); ctx.lineTo(mx, surfY - 8); ctx.stroke();
-    ctx.fillText(parseFloat((d * i / 10).toFixed(1)) + 'm', mx, surfY - 12);
+    ctx.beginPath(); ctx.moveTo(mx, surfY - 1); ctx.lineTo(mx, surfY - 9); ctx.stroke();
+    ctx.fillText(parseFloat((d * i / 10).toFixed(1)) + 'm', mx, surfY - 13);
   }
   ctx.textAlign = 'left';
+  ctx.restore();
 
-  /* Block — x is in metres, convert to canvas pixels */
-  var trackFrac = (d > 0) ? Math.min(wrk.x / d, 1) : 0;
+  /* ---- Block ---- */
+  var trackFrac = (d > 0) ? Math.min(Math.max(wrk.x / d, 0), 1) : 0;
   var bx = margin + trackFrac * trackW;
   var bw = 58, bh = 44;
   var by = surfY - bh;
 
-  ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 18;
-  var bGrad = ctx.createLinearGradient(bx - bw / 2, by, bx - bw / 2, by + bh);
-  bGrad.addColorStop(0, 'rgba(0,212,255,0.9)');
-  bGrad.addColorStop(1, 'rgba(0,60,90,0.7)');
-  ctx.fillStyle = bGrad; ctx.fillRect(bx - bw / 2, by, bw, bh);
+  ctx.save();
+  /* Block shadow */
+  ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 22 + Math.abs(wrk.v) * 0.5;
+  /* Face gradient */
+  var bGrad = ctx.createLinearGradient(bx - bw/2, by, bx + bw/2, by + bh);
+  bGrad.addColorStop(0,   'rgba(0,212,255,0.95)');
+  bGrad.addColorStop(0.5, 'rgba(0,160,200,0.85)');
+  bGrad.addColorStop(1,   'rgba(0,60,90,0.75)');
+  ctx.fillStyle = bGrad;
+  ctx.fillRect(bx - bw/2, by, bw, bh);
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 2;
-  ctx.strokeRect(bx - bw / 2, by, bw, bh);
-  ctx.fillStyle = '#000'; ctx.font = 'bold 12px DM Sans';
-  ctx.textAlign = 'center'; ctx.fillText(m + 'kg', bx, by + bh / 2 + 5); ctx.textAlign = 'left';
+  /* Bright top edge */
+  ctx.strokeStyle = 'rgba(180,240,255,0.8)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(bx - bw/2, by); ctx.lineTo(bx + bw/2, by); ctx.stroke();
+  /* Side borders */
+  ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(bx - bw/2, by, bw, bh);
+  /* Specular */
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fillRect(bx - bw/2 + 4, by + 4, 10, bh - 8);
+  /* Mass label */
+  ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.font = 'bold 12px DM Sans';
+  ctx.textAlign = 'center'; ctx.fillText(m + 'kg', bx, by + bh/2 + 5); ctx.textAlign = 'left';
+  ctx.restore();
 
-  /* Applied Force arrow */
+  /* ---- Applied Force arrow ---- */
   if (F > 0) {
-    var th_rad  = th_deg * Math.PI / 180;
+    var th_rad   = th_deg * Math.PI / 180;
     var arrowLen = Math.min(F * 0.8, 90);
-    drawArrow(ctx, bx, by + bh / 2,
+    drawArrow(ctx, bx, by + bh/2,
       bx + arrowLen * Math.cos(th_rad),
-      by + bh / 2 - arrowLen * Math.sin(th_rad),
+      by + bh/2 - arrowLen * Math.sin(th_rad),
       '#ff3e8a', 'F=' + fmtSci(F) + 'N', 2.5);
   }
 
-  /* Friction arrow */
-  if (mu > 0 && m > 0 && simRunning) {
-    var Ff   = mu * m * g;
+  /* ---- Friction arrow (only while moving) ---- */
+  if (mu > 0 && m > 0 && simRunning && Math.abs(wrk.v) > 0.01) {
+    var Ff    = mu * m * g;
     var frLen = Math.min(Ff * 0.8, 70);
     drawArrow(ctx, bx, by + bh - 6, bx - frLen, by + bh - 6, '#ff6b35', 'Ff=' + fmtSci(Ff) + 'N', 1.5);
   }
 
-  /* Height indicator */
+  /* ---- Height indicator ---- */
   if (h > 0) {
-    ctx.strokeStyle = 'rgba(168,255,62,0.4)';
-    ctx.lineWidth = 1.5; ctx.setLineDash([3, 4]);
-    var hPx = h * 8;
+    var hPx = Math.min(h * 8, surfY - 20);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(168,255,62,0.4)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 4]);
     ctx.beginPath();
-    ctx.moveTo(bx + bw / 2 + 16, surfY);
-    ctx.lineTo(bx + bw / 2 + 16, surfY - hPx);
+    ctx.moveTo(bx + bw/2 + 16, surfY);
+    ctx.lineTo(bx + bw/2 + 16, surfY - hPx);
     ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#a8ff3e'; ctx.font = '11px Space Mono';
-    ctx.fillText('h=' + h + 'm', bx + bw / 2 + 22, surfY - hPx / 2);
+    drawLabel(ctx, 'h=' + h + 'm', bx + bw/2 + 36, surfY - hPx/2, '#a8ff3e', '10px Space Mono');
+    ctx.restore();
   }
 
-  /* Velocity readout — wrk.v is now in physical m/s */
-  ctx.fillStyle = '#a8ff3e'; ctx.font = 'bold 13px Space Mono, monospace';
-  ctx.fillText('v = ' + fmt(Math.abs(wrk.v), 2) + ' m/s', margin + trackW - 155, surfY - bh - 14);
+  /* ---- Velocity badge ---- */
+  var vAbs = Math.abs(wrk.v);
+  drawLabel(ctx, 'v = ' + fmt(vAbs, 2) + ' m/s',
+    margin + trackW - 70, surfY - bh - 18, '#a8ff3e', 'bold 12px Space Mono');
 
-  /* KE history graph */
+  /* ---- Landed badge ---- */
+  if (wrk.done) {
+    drawLabel(ctx, '● Stopped  x = ' + fmt(wrk.x, 2) + ' m',
+      W / 2, surfY - bh - 18, '#00d4ff', 'bold 11px DM Sans');
+  }
+
+  /* ---- KE history graph ---- */
   if (wrk.ke_history.length > 2) {
     var gx = margin, gy = H * 0.78, gw = trackW, gh = H * 0.13;
-    ctx.fillStyle = 'rgba(10,13,20,0.75)'; ctx.fillRect(gx, gy, gw, gh);
-    ctx.strokeStyle = 'rgba(30,42,66,0.8)'; ctx.lineWidth = 1; ctx.strokeRect(gx, gy, gw, gh);
+    ctx.save();
+    ctx.fillStyle   = 'rgba(8,11,18,0.88)';
+    ctx.strokeStyle = 'rgba(30,42,66,0.9)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(gx, gy, gw, gh, 4); ctx.fill(); ctx.stroke();
 
     var maxKE = Math.max.apply(null, wrk.ke_history.concat([1]));
     ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 2;
+    ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 4;
     ctx.beginPath();
     wrk.ke_history.forEach(function(ke, i) {
-      var kx = gx + (i / (wrk.ke_history.length - 1)) * gw;
+      var kx = gx + (i / Math.max(wrk.ke_history.length - 1, 1)) * gw;
       var ky = gy + gh - (ke / maxKE) * (gh - 6);
       if (i === 0) ctx.moveTo(kx, ky); else ctx.lineTo(kx, ky);
     });
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(107,122,153,0.7)'; ctx.font = '10px Space Mono';
-    ctx.fillText('KE over time', gx + 6, gy + 13);
-    ctx.fillText('max: ' + fmtSci(maxKE) + ' J', gx + gw - 100, gy + 13);
+    ctx.stroke(); ctx.shadowBlur = 0;
+
+    ctx.font = '9px Space Mono';
+    ctx.fillStyle = 'rgba(107,122,153,0.7)';
+    ctx.fillText('KE over time', gx + 6, gy + 12);
+    ctx.fillStyle = '#00d4ff';
+    ctx.fillText('max: ' + fmtSci(maxKE) + ' J', gx + gw - 110, gy + 12);
+    ctx.restore();
   }
 }
 
